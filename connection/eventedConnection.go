@@ -33,13 +33,13 @@ type EventedConnection struct {
 }
 
 // NewEventedConnection is the Connection constructor.
-func NewEventedConnection(conf *Config, endpoint string) (*EventedConnection, error) {
-  conn := EventedConnection{}
-  if len(endpoint) == 0 {
+func NewEventedConnection(conf *Config) (*EventedConnection, error) {
+  if len(conf.Endpoint) == 0 {
     return nil, errors.New("Invalid endpoint (empty string)")
   }
 
-  conn.Endpoint = endpoint
+  conn := EventedConnection{}
+  conn.Endpoint = config.Endpoint
   conn.ConnectionTimeout = 5 // default timeout for connecting
   if conf.Timeout > 0 {
     conn.ConnectionTimeout = conf.Timeout
@@ -48,8 +48,8 @@ func NewEventedConnection(conf *Config, endpoint string) (*EventedConnection, er
   conn.Disconnected = make(chan struct{}, 0)
   conn.Connected = make(chan struct{}, 0)
   conn.Canceled = make(chan struct{}, 0)
-  conn.Read = make(chan []byte, 5) // buffer of 5 packets (up to 5 * readBufferSize). reduces blocking when reading from connection
-  conn.writeChan = make(chan []byte)
+  conn.Read = make(chan []byte, 4) // buffer of 4 packets (up to 4 * readBufferSize). reduces blocking when reading from connection
+  conn.writeChan = make(chan []byte) // not buffered so that the Write method can block and the caller will know if the write was successful or not
   conn.mutex = &sync.RWMutex{}
   conn.active = false
   return &conn, nil

@@ -5,14 +5,9 @@ import (
   "io"
 )
 
-// Endpoint - Configuration for generic endpoints
-type Endpoint struct {
-  Host string `json:"host"`
-}
-
 // Config - Struct for containing all configuration data for the StableConnection
 type Config struct {
-  Endpoint  Endpoint `json:"endpoint"`
+  Endpoint        string `json:"endpoint"`
   ReadTimeout     int    `json:"readTimeout"`
   WriteTimeout    int    `json:"writeTimeout"`
 }
