@@ -23,6 +23,10 @@ type EventedConnection struct {
   Connected            chan struct{}
   Canceled             chan struct{}
 
+  canceledSent         sync.Once
+  closer               sync.Once
+  starter              sync.Once
+
   writeChan            chan []byte
   mutex                *sync.RWMutex // allows for using this connection in multiple goroutines
   active               bool
@@ -53,20 +57,22 @@ func NewEventedConnection(conf *Config, endpoint string) (*EventedConnection, er
 
 // Connect attempts to establish a TCP connection to conn.Endpoint.
 func (conn *EventedConnection) Connect() error {
-  timeout := time.Duration(conn.ConnectionTimeout) // must cast int to Duration if the int is not a constant
-  tcpConn, err := net.DialTimeout("tcp", conn.Endpoint, timeout*time.Second)
-  if err != nil {
-    conn.Cancel()
-  } else {
-    conn.mutex.Lock()
-    conn.C = tcpConn
-    conn.active = true
-    conn.mutex.Unlock()
-    go conn.writeToConn()
-    go conn.readFromConn()
-    close(conn.Connected) // broadcast that TCP connection to interface was established
-    return
-  }
+  conn.starter.Do(func() {
+    timeout := time.Duration(conn.ConnectionTimeout) // must cast int to Duration if the int is not a constant
+    tcpConn, err := net.DialTimeout("tcp", conn.Endpoint, timeout*time.Second)
+    if err != nil {
+      conn.Cancel()
+    } else {
+      conn.mutex.Lock()
+      conn.C = tcpConn
+      conn.active = true
+      conn.mutex.Unlock()
+      go conn.writeToConn()
+      go conn.readFromConn()
+      close(conn.Connected) // broadcast that TCP connection to interface was established
+      return
+    }
+  })
 }
 
 // Write provides a thread-safe way to send messages to the endpoint. If the connection is
@@ -118,22 +124,26 @@ func (conn *EventedConnection) writeToConn() {
 
 // Cancel aborts the connection process
 func (conn *EventedConnection) Cancel() {
-  close(conn.Canceled) // broadcast that TCP connection to interface was established
+  conn.canceledSent.Do(func() {
+    close(conn.Canceled) // broadcast that TCP connection to interface was established
+  })
 }
 
 // Close closes the TCP connection. Broadcasts via the Canceled and Disconnected channels.
 // Provides a 3 second grace period after the Canceled event for consumers to prepare for the
 // disconnect.
 func (conn *EventedConnection) Close() {
-  conn.mutex.Lock()
-  conn.Cancel()
-  time.Sleep(3 * time.Second) // grace period before closing the connection
-  conn.active = false         // set "active" flag to false so we no longer queue up packets to send
-  if conn.C != nil {
-    conn.C.Close()
-    close(conn.Disconnected) // broadcast that TCP connection to interface was closed
-  }
-  conn.mutex.Unlock()
+  conn.closer.Do(func() {
+    conn.mutex.Lock()
+    conn.Cancel()
+    time.Sleep(3 * time.Second) // grace period before closing the connection
+    conn.active = false         // set "active" flag to false so we no longer queue up packets to send
+    if conn.C != nil {
+      conn.C.Close()
+      close(conn.Disconnected) // broadcast that TCP connection to interface was closed
+    }
+    conn.mutex.Unlock()
+  })
 }
 
 // Disconnect is an alias for conn.Close()
