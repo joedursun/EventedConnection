@@ -71,6 +71,16 @@ func (conn *StableConnection) Connect() error {
 
 // Write provides a thread-safe way to send messages to the endpoint.
 func (conn *StableConnection) Write(record []byte) {
+  conn.mutex.RLock() // obtain lock before checking if connection is dead so value isn't changed while reading
+  defer conn.mutex.RUnlock()
+  if conn.C == nil {
+    // silently drop packet to prevent pooling of data in calling goroutines.
+    // if we don't do this then we'd either block (pausing execution until conn.writeChan is read)
+    // or, in the case where caller is in separate goroutine, then the caller could accumulate goroutines
+    // waiting to write to the TCP connection.
+    return
+  }
+
   if conn.active {
     conn.writeChan <- record
   }
