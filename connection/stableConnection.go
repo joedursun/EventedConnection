@@ -17,6 +17,8 @@ type StableConnection struct {
   ConnectionTimeout    int
   Endpoint             string
   Read                 chan []byte
+  writeChan            chan []byte
+  active               bool
 }
 
 // NewStableConnection is the Connection constructor.
@@ -31,6 +33,7 @@ func NewStableConnection(conf *Config, endpoint string) (*StableConnection, erro
     conn.ConnectionTimeout = conf.Timeout
   }
   conn.Read = make(chan []byte, 5) // buffer of 5 packets (up to 5 * readBufferSize). reduces blocking when reading from connection
+  conn.active = false
   return &conn, nil
 }
 
@@ -42,13 +45,17 @@ func (conn *StableConnection) Connect() error {
     return err
   }
   conn.C = tcpConn
+  conn.active = true
   go conn.readFromConn()
   return nil
 }
 
 // Write provides a thread-safe way to send messages to the endpoint.
 func (conn *StableConnection) Write(record []byte) {
-  // TODO implement me
+  // TODO write a consumer for this chan
+  if conn.active {
+    conn.writeChan <- record
+  }
 }
 
 // Close closes the TCP connection
@@ -59,8 +66,11 @@ func (conn *StableConnection) Close() {
 }
 
 // processResponse handles data coming from TCP connection
-func (conn *StableConnection) processResponse() {
-  // TODO implement me
+// and sends it through the conn.Read chan
+func (conn *StableConnection) processResponse(data) {
+  if len(data) > 0 {
+    conn.Read <- data
+  }
 }
 
 func (conn *StableConnection) readFromConn() error {
