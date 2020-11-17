@@ -56,13 +56,17 @@ func (conn *StableConnection) Connect() error {
   timeout := time.Duration(conn.ConnectionTimeout) // must cast int to Duration if the int is not a constant
   tcpConn, err := net.DialTimeout("tcp", conn.Endpoint, timeout*time.Second)
   if err != nil {
-    return err
+    conn.Cancel()
+  } else {
+    conn.mutex.Lock()
+    conn.C = tcpConn
+    conn.active = true
+    conn.mutex.Unlock()
+    go conn.writeToConn()
+    go conn.readFromConn()
+    close(conn.Connected) // broadcast that TCP connection to interface was established
+    return
   }
-  conn.C = tcpConn
-  conn.active = true
-  go conn.readFromConn()
-  go conn.writeToConn()
-  return nil
 }
 
 // Write provides a thread-safe way to send messages to the endpoint.
@@ -78,7 +82,6 @@ func (conn *StableConnection) Write(record []byte) {
 func (conn *StableConnection) writeToConn() {
   defer conn.Close()
 
-  // TODO add cancel and disconnect handlers here
   for {
     select {
     case data := <-conn.writeChan:
@@ -90,8 +93,17 @@ func (conn *StableConnection) writeToConn() {
       if err != nil {
         return
       }
+    case <-conn.Disconnected:
+      return
+    case <-conn.Canceled:
+      return
     }
   }
+}
+
+// Cancel aborts the connection process
+func (conn *StableConnection) Cancel() {
+  // TODO implement this
 }
 
 // Close closes the TCP connection
@@ -99,6 +111,11 @@ func (conn *StableConnection) Close() {
   if conn.C != nil {
     conn.C.Close()
   }
+}
+
+// Disconnect is an alias for conn.Close()
+func (conn *StableConnection) Disconnect() {
+  conn.Close()
 }
 
 // processResponse handles data coming from TCP connection
