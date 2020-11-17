@@ -103,14 +103,22 @@ func (conn *StableConnection) writeToConn() {
 
 // Cancel aborts the connection process
 func (conn *StableConnection) Cancel() {
-  // TODO implement this
+  close(conn.Canceled) // broadcast that TCP connection to interface was established
 }
 
-// Close closes the TCP connection
+// Close closes the TCP connection. Broadcasts via the Canceled and Disconnected channels.
+// Provides a 3 second grace period after the Canceled event for consumers to prepare for the
+// disconnect.
 func (conn *StableConnection) Close() {
+  conn.mutex.Lock()
+  conn.Cancel()
+  time.Sleep(3 * time.Second) // grace period before closing the connection
+  conn.active = false         // set "active" flag to false so we no longer queue up records to send
   if conn.C != nil {
     conn.C.Close()
+    close(conn.Disconnected) // broadcast that TCP connection to interface was closed
   }
+  conn.mutex.Unlock()
 }
 
 // Disconnect is an alias for conn.Close()
