@@ -81,10 +81,6 @@ func (conn *EventedConnection) Write(data []byte) error {
   conn.mutex.RLock() // obtain lock before checking if connection is dead so value isn't changed while reading
   defer conn.mutex.RUnlock()
   if conn.C == nil {
-    // silently drop packet to prevent pooling of data in calling goroutines.
-    // if we don't do this then we'd either block (pausing execution until conn.writeChan is read)
-    // or, in the case where caller is in separate goroutine, then the caller could accumulate goroutines
-    // waiting to write to the TCP connection.
     return errors.New("connection is nil and data was not sent")
   }
 
