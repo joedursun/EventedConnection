@@ -5,8 +5,6 @@ import (
   "net"
   "sync"
   "time"
-
-  "github.com/joedursun/StableConnection/config"
 )
 
 // TCPReadTimeout sets the amount of time to wait for a record from the endpoint before considering the connection dead
@@ -22,7 +20,7 @@ type StableConnection struct {
 }
 
 // NewStableConnection is the Connection constructor.
-func NewStableConnection(conf *config.Config, endpoint string) (*StableConnection, error) {
+func NewStableConnection(conf *Config, endpoint string) (*StableConnection, error) {
   conn := StableConnection{}
   if len(endpoint) == 0 {
     return nil, errors.New("Invalid endpoint (empty string)")
