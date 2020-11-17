@@ -106,7 +106,12 @@ func (conn *EventedConnection) writeToConn() {
       if err != nil {
         return
       }
-      _, err = conn.C.Write(data)
+
+      // Obtain lock so that conn.C is not closed while attempting to write
+      conn.mutex.RLock()
+      _, err = conn.C.Write(record)
+      conn.mutex.RUnlock()
+
       if err != nil {
         return
       }
