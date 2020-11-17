@@ -7,7 +7,7 @@ import (
   "time"
 )
 
-// TCPReadTimeout sets the amount of time to wait for a record from the endpoint before considering the connection dead
+// TCPReadTimeout sets the amount of time to wait for a packet from the endpoint before considering the connection dead
 const TCPReadTimeout = 10 * time.Minute
 const readBufferSize = 16 * 1024 // 16 KB
 
@@ -69,8 +69,9 @@ func (conn *StableConnection) Connect() error {
   }
 }
 
-// Write provides a thread-safe way to send messages to the endpoint.
-func (conn *StableConnection) Write(record []byte) {
+// Write provides a thread-safe way to send messages to the endpoint. If the connection is
+// nil (e.g. closed) then this is a noop.
+func (conn *StableConnection) Write(data []byte) error {
   conn.mutex.RLock() // obtain lock before checking if connection is dead so value isn't changed while reading
   defer conn.mutex.RUnlock()
   if conn.C == nil {
@@ -78,12 +79,16 @@ func (conn *StableConnection) Write(record []byte) {
     // if we don't do this then we'd either block (pausing execution until conn.writeChan is read)
     // or, in the case where caller is in separate goroutine, then the caller could accumulate goroutines
     // waiting to write to the TCP connection.
-    return
+    return errors.New("connection is nil and data was not sent")
   }
 
   if conn.active {
-    conn.writeChan <- record
+    conn.writeChan <- data
+  } else {
+    return errors.New("connection is not active and data was not sent")
   }
+
+  return nil
 }
 
 // writeToConn receives messages on writeChan and writes them to the TCP connection. If any error occurs
@@ -123,7 +128,7 @@ func (conn *StableConnection) Close() {
   conn.mutex.Lock()
   conn.Cancel()
   time.Sleep(3 * time.Second) // grace period before closing the connection
-  conn.active = false         // set "active" flag to false so we no longer queue up records to send
+  conn.active = false         // set "active" flag to false so we no longer queue up packets to send
   if conn.C != nil {
     conn.C.Close()
     close(conn.Disconnected) // broadcast that TCP connection to interface was closed
