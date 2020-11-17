@@ -37,7 +37,7 @@ func NewStableConnection(conf *Config, endpoint string) (*StableConnection, erro
   return &conn, nil
 }
 
-// Connect attempts to establish a TCP connection to Connection.Endpoint.
+// Connect attempts to establish a TCP connection to conn.Endpoint.
 func (conn *StableConnection) Connect() error {
   timeout := time.Duration(conn.ConnectionTimeout) // must cast int to Duration if the int is not a constant
   tcpConn, err := net.DialTimeout("tcp", conn.Endpoint, timeout*time.Second)
@@ -47,14 +47,36 @@ func (conn *StableConnection) Connect() error {
   conn.C = tcpConn
   conn.active = true
   go conn.readFromConn()
+  go conn.writeToConn()
   return nil
 }
 
 // Write provides a thread-safe way to send messages to the endpoint.
 func (conn *StableConnection) Write(record []byte) {
-  // TODO write a consumer for this chan
   if conn.active {
     conn.writeChan <- record
+  }
+}
+
+// writeToConn receives messages on writeChan and writes them to the TCP connection. If any error occurs
+// the connection is closed and this function returns. In the event of an intentional disconnect
+// event this function also returns.
+func (conn *StableConnection) writeToConn() {
+  defer conn.Close()
+
+  // TODO add cancel and disconnect handlers here
+  for {
+    select {
+    case data := <-conn.writeChan:
+      err := conn.C.SetWriteDeadline(time.Now().Add(5 * time.Second))
+      if err != nil {
+        return
+      }
+      _, err = conn.C.Write(data)
+      if err != nil {
+        return
+      }
+    }
   }
 }
 
