@@ -123,26 +123,29 @@ func (conn *EventedConnection) writeToConn() {
   }
 }
 
-// Cancel aborts the connection process
+// Cancel aborts the connection process and is safe to call more than once.
+// Subsequent calls will have no effect. This method is called if the attempt
+// to establish a connection fails and warns any downstream caller or event
+// listener that a connection was aborted.
 func (conn *EventedConnection) Cancel() {
   conn.canceledSent.Do(func() {
-    close(conn.Canceled) // broadcast that TCP connection to interface was established
+    close(conn.Canceled) // broadcast that TCP connection to interface was canceled
   })
 }
 
 // Close closes the TCP connection. Broadcasts via the Canceled and Disconnected channels.
-// Provides a 3 second grace period after the Canceled event for consumers to prepare for the
-// disconnect.
+// Safe to call more than once, however will only close an open TCP connection on the first call.
 func (conn *EventedConnection) Close() {
   conn.closer.Do(func() {
     conn.mutex.Lock()
     conn.Cancel()
-    time.Sleep(3 * time.Second) // grace period before closing the connection
     conn.active = false         // set "active" flag to false so we no longer queue up packets to send
+
     if conn.C != nil {
       conn.C.Close()
-      close(conn.Disconnected) // broadcast that TCP connection to interface was closed
     }
+
+    close(conn.Disconnected) // broadcast that TCP connection to interface was closed
     conn.mutex.Unlock()
   })
 }
