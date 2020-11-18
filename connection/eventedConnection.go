@@ -18,7 +18,7 @@ type EventedConnection struct {
   C                    net.Conn
   ConnectionTimeout    int
   Endpoint             string
-  Read                 chan []byte
+  Read                 chan *[]byte
   Disconnected         chan struct{}
   Connected            chan struct{}
   Canceled             chan struct{}
@@ -29,7 +29,7 @@ type EventedConnection struct {
   closer               sync.Once
   starter              sync.Once
 
-  writeChan            chan []byte
+  writeChan            chan *[]byte
   mutex                *sync.RWMutex // allows for using this connection in multiple goroutines
   active               bool
 }
@@ -52,8 +52,8 @@ func NewEventedConnection(conf *Config) (*EventedConnection, error) {
   conn.Disconnected = make(chan struct{}, 0)
   conn.Connected = make(chan struct{}, 0)
   conn.Canceled = make(chan struct{}, 0)
-  conn.Read = make(chan []byte, 4) // buffer of 4 packets (up to 4 * readBufferSize). reduces blocking when reading from connection
-  conn.writeChan = make(chan []byte) // not buffered so that the Write method can block and the caller will know if the write was successful or not
+  conn.Read = make(chan *[]byte, 4) // buffer of 4 packets (up to 4 * readBufferSize). reduces blocking when reading from connection
+  conn.writeChan = make(chan *[]byte) // not buffered so that the Write method can block and the caller will know if the write was successful or not
   conn.mutex = &sync.RWMutex{}
   conn.active = false
 
@@ -88,7 +88,7 @@ func (conn *EventedConnection) Connect() {
 
 // Write provides a thread-safe way to send messages to the endpoint. If the connection is
 // nil (e.g. closed) then this is a noop.
-func (conn *EventedConnection) Write(data []byte) error {
+func (conn *EventedConnection) Write(data *[]byte) error {
   conn.mutex.RLock() // obtain lock before checking if connection is dead so value isn't changed while reading
   defer conn.mutex.RUnlock()
   if conn.C == nil {
@@ -120,7 +120,7 @@ func (conn *EventedConnection) writeToConn() {
 
       // Obtain lock so that conn.C is not closed while attempting to write
       conn.mutex.RLock()
-      _, err = conn.C.Write(data)
+      _, err = conn.C.Write(*data)
       conn.mutex.RUnlock()
 
       if err != nil {
@@ -170,11 +170,11 @@ func (conn *EventedConnection) Disconnect() {
 // and sends it through the conn.Read chan
 func (conn *EventedConnection) processResponse(data []byte) error {
   if len(data) > 0 {
-    data, err := conn.afterReadHook(data)
+    processed, err := conn.afterReadHook(data)
     if err != nil {
       return err
     }
-    conn.Read <- data
+    conn.Read <- &processed
   }
 
   return nil
