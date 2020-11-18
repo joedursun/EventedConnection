@@ -35,6 +35,8 @@ func main() {
     select {
     case data := <-con.Read:
       fmt.Println(string(data))
+      fmt.Println("Closing the connection.")
+      con.Close()
     case <-con.Disconnected:
       fmt.Println("Disconnected.")
       return
