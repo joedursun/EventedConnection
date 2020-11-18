@@ -7,9 +7,10 @@ import (
 
 // Config - Struct for containing all configuration data for the StableConnection
 type Config struct {
-  Endpoint        string `json:"endpoint"`
-  ReadTimeout     int    `json:"readTimeout"`
-  WriteTimeout    int    `json:"writeTimeout"`
+  Endpoint              string `json:"endpoint"`
+  ConnectionTimeout     int    `json:"connectionTimeout"`
+  ReadTimeout           int    `json:"readTimeout"`
+  WriteTimeout          int    `json:"writeTimeout"`
 }
 // Unmarshal sets config fields from the JSON data
 func (conf *Config) Unmarshal(jsonBody io.Reader) (*Config, error) {

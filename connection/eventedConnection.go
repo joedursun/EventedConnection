@@ -39,10 +39,12 @@ func NewEventedConnection(conf *Config) (*EventedConnection, error) {
   }
 
   conn := EventedConnection{}
-  conn.Endpoint = config.Endpoint
+  conn.Endpoint = conf.Endpoint
   conn.ConnectionTimeout = 5 // default timeout for connecting
-  if conf.Timeout > 0 {
-    conn.ConnectionTimeout = conf.Timeout
+  if conf.ConnectionTimeout > 0 {
+    conn.ConnectionTimeout = conf.ConnectionTimeout
+  } else {
+    conn.ConnectionTimeout = 3
   }
 
   conn.Disconnected = make(chan struct{}, 0)
@@ -56,7 +58,7 @@ func NewEventedConnection(conf *Config) (*EventedConnection, error) {
 }
 
 // Connect attempts to establish a TCP connection to conn.Endpoint.
-func (conn *EventedConnection) Connect() error {
+func (conn *EventedConnection) Connect() {
   conn.starter.Do(func() {
     timeout := time.Duration(conn.ConnectionTimeout) // must cast int to Duration if the int is not a constant
     tcpConn, err := net.DialTimeout("tcp", conn.Endpoint, timeout*time.Second)
@@ -109,7 +111,7 @@ func (conn *EventedConnection) writeToConn() {
 
       // Obtain lock so that conn.C is not closed while attempting to write
       conn.mutex.RLock()
-      _, err = conn.C.Write(record)
+      _, err = conn.C.Write(data)
       conn.mutex.RUnlock()
 
       if err != nil {
@@ -146,6 +148,7 @@ func (conn *EventedConnection) Close() {
     }
 
     close(conn.Disconnected) // broadcast that TCP connection to interface was closed
+    close(conn.Read)         // close the read chan too so any read loops are aware
     conn.mutex.Unlock()
   })
 }
@@ -157,7 +160,7 @@ func (conn *EventedConnection) Disconnect() {
 
 // processResponse handles data coming from TCP connection
 // and sends it through the conn.Read chan
-func (conn *EventedConnection) processResponse(data) {
+func (conn *EventedConnection) processResponse(data []byte) {
   if len(data) > 0 {
     conn.Read <- data
   }
@@ -186,7 +189,7 @@ func (conn *EventedConnection) readFromConn() error {
     }
 
     if err != nil {
-      return
+      return err
     }
   }
 }
