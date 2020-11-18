@@ -145,7 +145,6 @@ func (conn *EventedConnection) Close() {
     }
 
     close(conn.Disconnected) // broadcast that TCP connection to interface was closed
-    close(conn.Read)         // close the read chan too so any read loops are aware
     conn.mutex.Unlock()
   })
 }

@@ -32,6 +32,7 @@ func sendHelloWorld() {
 
   if err != nil {
     fmt.Println(err)
+    return
   }
 
   err = con.Connect()
@@ -68,6 +69,7 @@ func readFromConnection() {
   con, err := connection.NewEventedConnection(&conf)
   if err != nil {
     fmt.Println(err)
+    return
   }
 
   err = con.Connect()
