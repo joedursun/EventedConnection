@@ -9,9 +9,9 @@ in a thread-safe way. For example, calling `Close()` on the connection will clos
 and any subsequent calls will be ignored, so calling `Close()` in any number of goroutines will not
 cause a panic.
 
-### Lifecycle hooks
+### Event hooks
 
-EventedConnection provides the lifecycle hooks whose signatures can be found in `connection/config.go`:
+EventedConnection provides the Event hooks whose signatures can be found in `connection/config.go`:
 - `AfterReadHook`: called after reading data from the connection. Can be used to modify or filter received data or to throw an error if receiving something unexpected.
 
 ### Basic usage
