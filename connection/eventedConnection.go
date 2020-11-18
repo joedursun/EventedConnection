@@ -60,7 +60,7 @@ func NewEventedConnection(conf *Config) (*EventedConnection, error) {
   if conf.AfterReadHook != nil {
     conn.afterReadHook = conf.AfterReadHook
   } else {
-    conn.afterReadHook = func(data *[]byte) error { return nil }
+    conn.afterReadHook = func(data []byte) ([]byte, error) { return data, nil }
   }
 
   return &conn, nil
@@ -171,7 +171,7 @@ func (conn *EventedConnection) Disconnect() {
 // and sends it through the conn.Read chan
 func (conn *EventedConnection) processResponse(data []byte) error {
   if len(data) > 0 {
-    err := conn.afterReadHook(&data)
+    data, err := conn.afterReadHook(data)
     if err != nil {
       return err
     }
@@ -181,6 +181,9 @@ func (conn *EventedConnection) processResponse(data []byte) error {
   return nil
 }
 
+// readFromConn reads data from the connection into a buffer and then
+// passes onto processResponse. In the event of an error the connection
+// is closed.
 func (conn *EventedConnection) readFromConn() error {
   defer conn.Close()
 
