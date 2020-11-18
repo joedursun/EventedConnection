@@ -5,7 +5,7 @@ import (
   "io"
 )
 
-// Config - Struct for containing all configuration data for the StableConnection
+// Config - Struct for containing all configuration data for the EventedConnection
 type Config struct {
   Endpoint              string `json:"endpoint"`
   ConnectionTimeout     int    `json:"connectionTimeout"`
