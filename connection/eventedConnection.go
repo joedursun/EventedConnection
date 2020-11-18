@@ -67,23 +67,28 @@ func NewEventedConnection(conf *Config) (*EventedConnection, error) {
 }
 
 // Connect attempts to establish a TCP connection to conn.Endpoint.
-func (conn *EventedConnection) Connect() {
+func (conn *EventedConnection) Connect() error {
+  var err error
+  var tcpConn net.Conn
+
   conn.starter.Do(func() {
     timeout := time.Duration(conn.ConnectionTimeout) // must cast int to Duration if the int is not a constant
-    tcpConn, err := net.DialTimeout("tcp", conn.Endpoint, timeout*time.Second)
+    tcpConn, err = net.DialTimeout("tcp", conn.Endpoint, timeout*time.Second)
     if err != nil {
       conn.cancel()
-    } else {
-      conn.mutex.Lock()
-      conn.C = tcpConn
-      conn.active = true
-      conn.mutex.Unlock()
-      go conn.writeToConn()
-      go conn.readFromConn()
-      close(conn.Connected) // broadcast that TCP connection to interface was established
       return
     }
+
+    conn.mutex.Lock()
+    conn.C = tcpConn
+    conn.active = true
+    conn.mutex.Unlock()
+    go conn.writeToConn()
+    go conn.readFromConn()
+    close(conn.Connected) // broadcast that TCP connection to interface was established
+    return
   })
+  return err
 }
 
 // Write provides a thread-safe way to send messages to the endpoint. If the connection is
