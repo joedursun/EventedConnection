@@ -72,7 +72,7 @@ func (conn *EventedConnection) Connect() {
     timeout := time.Duration(conn.ConnectionTimeout) // must cast int to Duration if the int is not a constant
     tcpConn, err := net.DialTimeout("tcp", conn.Endpoint, timeout*time.Second)
     if err != nil {
-      conn.Cancel()
+      conn.cancel()
     } else {
       conn.mutex.Lock()
       conn.C = tcpConn
@@ -138,7 +138,7 @@ func (conn *EventedConnection) writeToConn() {
 // Subsequent calls will have no effect. This method is called if the attempt
 // to establish a connection fails and warns any downstream caller or event
 // listener that a connection was aborted.
-func (conn *EventedConnection) Cancel() {
+func (conn *EventedConnection) cancel() {
   conn.canceledSent.Do(func() {
     close(conn.Canceled) // broadcast that TCP connection to interface was canceled
   })
@@ -149,7 +149,6 @@ func (conn *EventedConnection) Cancel() {
 func (conn *EventedConnection) Close() {
   conn.closer.Do(func() {
     conn.mutex.Lock()
-    conn.Cancel()
     conn.active = false         // set "active" flag to false so we no longer queue up packets to send
 
     if conn.C != nil {
