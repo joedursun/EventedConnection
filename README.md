@@ -22,7 +22,7 @@ import (
 func main() {
   conf := connection.Config{
     Endpoint: "localhost:5111",
-    ConnectionTimeout: 10,
+    ConnectionTimeout: 3,
   }
 
   con, err := connection.NewEventedConnection(&conf)
@@ -33,16 +33,16 @@ func main() {
   con.Connect()
   for {
     select {
+    case <-con.Canceled:
+      fmt.Println("Canceled.")
+      return
+    case <-con.Disconnected:
+      fmt.Println("Disconnected.")
+      return
     case data := <-con.Read:
       fmt.Println(string(data))
       fmt.Println("Closing the connection.")
       con.Close()
-    case <-con.Disconnected:
-      fmt.Println("Disconnected.")
-      return
-    case <-con.Canceled:
-      fmt.Println("Canceled.")
-      return
     }
   }
 }
