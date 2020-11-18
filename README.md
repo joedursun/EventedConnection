@@ -44,7 +44,7 @@ func main() {
   for {
     select {
     case data := <-con.Read:
-      fmt.Println(string(data))
+      fmt.Println(string(*data))
       fmt.Println("Closing the connection.")
       con.Close()
     case <-con.Disconnected:
