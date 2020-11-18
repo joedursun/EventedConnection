@@ -28,10 +28,10 @@ func main() {
   conf := connection.Config{
     Endpoint: "localhost:5111",
     ConnectionTimeout: 3,
-    AfterReadHook: func(data *[]byte) error {
-      fmt.Println("Data before processing ", string(*data))
-      *data = []byte("Processed data!")
-      return nil
+    AfterReadHook: func(data []byte) ([]byte, error) {
+      fmt.Println("Data before processing ", string(data))
+      data = []byte("Processed data!")
+      return data, nil
     },
   }
 
@@ -56,5 +56,4 @@ func main() {
     }
   }
 }
-
 ```
