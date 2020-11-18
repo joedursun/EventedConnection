@@ -12,7 +12,7 @@ const TCPReadTimeout = 10 * time.Minute
 const readBufferSize = 16 * 1024 // 16 KB
 
 // EventedConnection gives us a stable way to connect and maintain a connection to a TCP endpoint.
-// EventedConnection broadcasts 3 separate events via closing a channel: Connected, Disconnected, and Canceled.
+// EventedConnection broadcasts 3 separate events via closing a channel: Connected and Disconnected.
 // This allows any number of downstream consumers to be informed when a state change happens.
 type EventedConnection struct {
   C                    net.Conn
@@ -21,11 +21,9 @@ type EventedConnection struct {
   Read                 chan *[]byte
   Disconnected         chan struct{}
   Connected            chan struct{}
-  Canceled             chan struct{}
 
   afterReadHook        AfterReadHook
 
-  canceledSent         sync.Once
   closer               sync.Once
   starter              sync.Once
 
@@ -51,7 +49,6 @@ func NewEventedConnection(conf *Config) (*EventedConnection, error) {
 
   conn.Disconnected = make(chan struct{}, 0)
   conn.Connected = make(chan struct{}, 0)
-  conn.Canceled = make(chan struct{}, 0)
   conn.Read = make(chan *[]byte, 4) // buffer of 4 packets (up to 4 * readBufferSize). reduces blocking when reading from connection
   conn.writeChan = make(chan *[]byte) // not buffered so that the Write method can block and the caller will know if the write was successful or not
   conn.mutex = &sync.RWMutex{}
@@ -75,7 +72,6 @@ func (conn *EventedConnection) Connect() error {
     timeout := time.Duration(conn.ConnectionTimeout) // must cast int to Duration if the int is not a constant
     tcpConn, err = net.DialTimeout("tcp", conn.Endpoint, timeout*time.Second)
     if err != nil {
-      conn.cancel()
       return
     }
 
@@ -133,23 +129,11 @@ func (conn *EventedConnection) writeToConn() {
       }
     case <-conn.Disconnected:
       return
-    case <-conn.Canceled:
-      return
     }
   }
 }
 
-// Cancel aborts the connection process and is safe to call more than once.
-// Subsequent calls will have no effect. This method is called if the attempt
-// to establish a connection fails and warns any downstream caller or event
-// listener that a connection was aborted.
-func (conn *EventedConnection) cancel() {
-  conn.canceledSent.Do(func() {
-    close(conn.Canceled) // broadcast that TCP connection to interface was canceled
-  })
-}
-
-// Close closes the TCP connection. Broadcasts via the Canceled and Disconnected channels.
+// Close closes the TCP connection. Broadcasts via the Disconnected channel.
 // Safe to call more than once, however will only close an open TCP connection on the first call.
 func (conn *EventedConnection) Close() {
   conn.closer.Do(func() {
