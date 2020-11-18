@@ -23,6 +23,8 @@ type EventedConnection struct {
   Connected            chan struct{}
   Canceled             chan struct{}
 
+  afterReadHook        AfterReadHook
+
   canceledSent         sync.Once
   closer               sync.Once
   starter              sync.Once
@@ -44,7 +46,7 @@ func NewEventedConnection(conf *Config) (*EventedConnection, error) {
   if conf.ConnectionTimeout > 0 {
     conn.ConnectionTimeout = conf.ConnectionTimeout
   } else {
-    conn.ConnectionTimeout = 3
+    conn.ConnectionTimeout = 30
   }
 
   conn.Disconnected = make(chan struct{}, 0)
@@ -54,6 +56,13 @@ func NewEventedConnection(conf *Config) (*EventedConnection, error) {
   conn.writeChan = make(chan []byte) // not buffered so that the Write method can block and the caller will know if the write was successful or not
   conn.mutex = &sync.RWMutex{}
   conn.active = false
+
+  if conf.AfterReadHook != nil {
+    conn.afterReadHook = conf.AfterReadHook
+  } else {
+    conn.afterReadHook = func(data *[]byte) error { return nil }
+  }
+
   return &conn, nil
 }
 
@@ -160,10 +169,16 @@ func (conn *EventedConnection) Disconnect() {
 
 // processResponse handles data coming from TCP connection
 // and sends it through the conn.Read chan
-func (conn *EventedConnection) processResponse(data []byte) {
+func (conn *EventedConnection) processResponse(data []byte) error {
   if len(data) > 0 {
+    err := conn.afterReadHook(&data)
+    if err != nil {
+      return err
+    }
     conn.Read <- data
   }
+
+  return nil
 }
 
 func (conn *EventedConnection) readFromConn() error {
@@ -185,7 +200,7 @@ func (conn *EventedConnection) readFromConn() error {
       res := make([]byte, numBytesRead)
       // Copy the buffer so it's safe to pass along
       copy(res, buffer[:numBytesRead])
-      conn.processResponse(res)
+      err = conn.processResponse(res)
     }
 
     if err != nil {
