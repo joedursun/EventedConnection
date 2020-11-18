@@ -9,6 +9,11 @@ in a thread-safe way. For example, calling `Close()` on the connection will clos
 and any subsequent calls will be ignored, so calling `Close()` in any number of goroutines will not
 cause a panic.
 
+### Lifecycle hooks
+
+EventedConnection provides the lifecycle hooks whose signatures can be found in `connection/config.go`:
+- `AfterReadHook`: called after reading data from the connection. Can be used to modify or filter received data or to throw an error if receiving something unexpected.
+
 ### Usage
 
 ```go
@@ -23,6 +28,11 @@ func main() {
   conf := connection.Config{
     Endpoint: "localhost:5111",
     ConnectionTimeout: 3,
+    AfterReadHook: func(data *[]byte) error {
+      fmt.Println("Data before processing ", string(*data))
+      *data = []byte("Processed data!")
+      return nil
+    },
   }
 
   con, err := connection.NewEventedConnection(&conf)
@@ -33,17 +43,18 @@ func main() {
   con.Connect()
   for {
     select {
-    case <-con.Canceled:
-      fmt.Println("Canceled.")
-      return
-    case <-con.Disconnected:
-      fmt.Println("Disconnected.")
-      return
     case data := <-con.Read:
       fmt.Println(string(data))
       fmt.Println("Closing the connection.")
       con.Close()
+    case <-con.Disconnected:
+      fmt.Println("Disconnected.")
+      return
+    case <-con.Canceled:
+      fmt.Println("Canceled.")
+      return
     }
   }
 }
+
 ```
