@@ -57,13 +57,15 @@ import (
 )
 
 func readFromConnection() {
-  conf := connection.Config{
-    Endpoint: "localhost:5111",
-    AfterReadHook: func(data []byte) ([]byte, error) {
-      fmt.Println("Data before processing ", string(data))
-      processed := []byte("Processed data!")
-      return processed, nil
-    },
+  // NewConfig initializes a config struct with defaults
+  // NewEventedConnection will provide defaults if the config
+  // doesn't set them, so using NewConfig is optional
+  conf := connection.NewConfig()
+  conf.Endpoint = "localhost:5111"
+  conf.AfterReadHook = func(data []byte) ([]byte, error) {
+    fmt.Println("Data before processing ", string(data))
+    processed := []byte("Processed data!")
+    return processed, nil
   }
 
   con, err := connection.NewEventedConnection(&conf)
