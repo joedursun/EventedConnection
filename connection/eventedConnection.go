@@ -8,16 +8,18 @@ import (
 )
 
 // TCPReadTimeout sets the amount of time to wait for a packet from the endpoint before considering the connection dead
-const TCPReadTimeout = 10 * time.Minute
-const readBufferSize = 16 * 1024 // 16 KB
+const TCPReadTimeout = 1 * time.Hour
 
 // EventedConnection gives us a stable way to connect and maintain a connection to a TCP endpoint.
 // EventedConnection broadcasts 3 separate events via closing a channel: Connected and Disconnected.
 // This allows any number of downstream consumers to be informed when a state change happens.
 type EventedConnection struct {
   C                    net.Conn
-  ConnectionTimeout    int
+  ConnectionTimeout    time.Duration
+  ReadTimeout          time.Duration
+  WriteTimeout         time.Duration
   Endpoint             string
+  ReadBufferSize       int
   Read                 chan *[]byte
   Disconnected         chan struct{}
   Connected            chan struct{}
@@ -40,16 +42,28 @@ func NewEventedConnection(conf *Config) (*EventedConnection, error) {
 
   conn := EventedConnection{}
   conn.Endpoint = conf.Endpoint
-  conn.ConnectionTimeout = 5 // default timeout for connecting
-  if conf.ConnectionTimeout > 0 {
-    conn.ConnectionTimeout = conf.ConnectionTimeout
-  } else {
-    conn.ConnectionTimeout = 30
+  if conf.ConnectionTimeout == 0 * time.Second { // default timeout for connecting
+    conn.ConnectionTimeout = 30 * time.Second
+  }
+
+  conn.ReadTimeout = conf.ReadTimeout
+  if conf.ReadTimeout == 0 * time.Second { // default timeout for receiving data
+    conn.ReadTimeout = 1 * time.Hour
+  }
+
+  conn.WriteTimeout = conf.WriteTimeout
+  if conf.WriteTimeout == 0 * time.Second { // default timeout for sending data
+    conn.WriteTimeout = 5 * time.Second
+  }
+
+  conn.ReadBufferSize = conf.ReadBufferSize
+  if conf.ReadBufferSize == 0 {
+    conn.ReadBufferSize = 16 * 1024 // 16 KB
   }
 
   conn.Disconnected = make(chan struct{}, 0)
   conn.Connected = make(chan struct{}, 0)
-  conn.Read = make(chan *[]byte, 4) // buffer of 4 packets (up to 4 * readBufferSize). reduces blocking when reading from connection
+  conn.Read = make(chan *[]byte, 4) // buffer of 4 packets (up to 4 * conn.ReadBufferSize). reduces blocking when reading from connection
   conn.writeChan = make(chan *[]byte) // not buffered so that the Write method can block and the caller will know if the write was successful or not
   conn.mutex = &sync.RWMutex{}
   conn.active = false
@@ -57,7 +71,7 @@ func NewEventedConnection(conf *Config) (*EventedConnection, error) {
   if conf.AfterReadHook != nil {
     conn.afterReadHook = conf.AfterReadHook
   } else {
-    conn.afterReadHook = func(data []byte) ([]byte, error) { return data, nil }
+    conn.afterReadHook = defaultAfterReadHook
   }
 
   return &conn, nil
@@ -69,8 +83,7 @@ func (conn *EventedConnection) Connect() error {
   var tcpConn net.Conn
 
   conn.starter.Do(func() {
-    timeout := time.Duration(conn.ConnectionTimeout) // must cast int to Duration if the int is not a constant
-    tcpConn, err = net.DialTimeout("tcp", conn.Endpoint, timeout*time.Second)
+    tcpConn, err = net.DialTimeout("tcp", conn.Endpoint, conn.ConnectionTimeout)
     if err != nil {
       return
     }
@@ -114,7 +127,7 @@ func (conn *EventedConnection) writeToConn() {
   for {
     select {
     case data := <-conn.writeChan:
-      err := conn.C.SetWriteDeadline(time.Now().Add(5 * time.Second))
+      err := conn.C.SetWriteDeadline(time.Now().Add(conn.WriteTimeout))
       if err != nil {
         return
       }
@@ -174,13 +187,13 @@ func (conn *EventedConnection) processResponse(data []byte) error {
 func (conn *EventedConnection) readFromConn() error {
   defer conn.Close()
 
-  buffer := make([]byte, readBufferSize)
+  buffer := make([]byte, conn.ReadBufferSize)
   for {
     if conn.C == nil {
       return errors.New("unable to read from nil connection")
     }
 
-    err := conn.C.SetReadDeadline(time.Now().Add(TCPReadTimeout))
+    err := conn.C.SetReadDeadline(time.Now().Add(conn.ReadTimeout))
     if err != nil {
       return err
     }
