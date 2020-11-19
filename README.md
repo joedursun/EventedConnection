@@ -1,6 +1,6 @@
 ## EventedConnection
 
-EventedConnection is a wrapper around `net.Conn` that aims to simplify maintaining a connection.
+EventedConnection is a wrapper around `net.Conn` that aims to simplify maintaining a long running connection.
 TCP connections can become tedious to handle when being read from or written to in multiple
 goroutines, and the reconnect logic can often lead to attempts to write to an old connection.
 
