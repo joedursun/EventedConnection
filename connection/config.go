@@ -17,18 +17,39 @@ func defaultAfterReadHook(data []byte) ([]byte, error) { return data, nil }
 // Config - Struct for containing all configuration data for the EventedConnection
 type Config struct {
   Endpoint              string `json:"endpoint"`
-
-  ConnectionTimeout     time.Duration
-  ReadTimeout           time.Duration
-  WriteTimeout          time.Duration
-
   ReadBufferSize        int    `json:"readBufferSize"`
+
+  ConnectionTimeout     time.Duration `json:"connectionTimeout"`
+  ReadTimeout           time.Duration `json:"readTimeout"`
+  WriteTimeout          time.Duration `json:"writeTimeout"`
+
   AfterReadHook         AfterReadHook
 }
 
-// Unmarshal sets config fields from the JSON data
-func (conf *Config) Unmarshal(jsonBody io.Reader) (*Config, error) {
-  err := json.NewDecoder(jsonBody).Decode(conf)
+// jsonConfig is used as a temp struct to unmarshal JSON into in order to properly parse
+// the duration attributes
+type jsonConfig struct {
+  Endpoint              string `json:"endpoint"`
+  ConnectionTimeout     string `json:"connectionTimeout"`
+  ReadTimeout           string `json:"readTimeout"`
+  WriteTimeout          string `json:"writeTimeout"`
+
+  ReadBufferSize        int    `json:"readBufferSize"`
+}
+
+// Unmarshal sets config fields from the JSON data. The timeout fields
+// are expected to conform to strings parsable by time.ParseDuration
+func (conf *Config) Unmarshal(jsonBody []byte) error {
+  var json jsonConfig
+  err := json.NewDecoder(jsonBody).Decode(&json)
+
+  conf.Endpoint = json.Endpoint
+  conf.ReadBufferSize = json.ReadBufferSize
+
+  conf.ConnectionTimeout = time.ParseDuration(json.ConnectionTimeout)
+  conf.ReadTimeout = time.ParseDuration(json.ReadTimeout)
+  conf.WriteTimeout = time.ParseDuration(json.WriteTimeout)
+
   return conf, err
 }
 
