@@ -20,7 +20,7 @@ type AfterConnectHook func() error
 // BeforeDisconnectHook is called just before a connection is terminated.
 // This hook is only called before a termination originating on this end of
 // the connection (ie. if EventedConnection.Endpoint closes the connection
-// or a timeout occurs then this hook is not called. Use the OnError callback
+// or a timeout occurs then this hook is not called). Use the OnError callback
 // to handle those cases.
 type BeforeDisconnectHook func() error
 
