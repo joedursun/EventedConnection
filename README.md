@@ -30,12 +30,12 @@ package main
 
 import (
   "fmt"
-  "github.com/joedursun/EventedConnection/connection"
+  "github.com/joedursun/EventedConnection"
 )
 
 func sendHelloWorld() {
-  conf := connection.Config{ Endpoint: "localhost:5111" }
-  con, err := connection.NewEventedConnection(&conf)
+  conf := eventedconnection.Config{ Endpoint: "localhost:5111" }
+  con, err := eventedconnection.NewClient(&conf)
 
   if err != nil {
     fmt.Println(err)
@@ -60,14 +60,14 @@ For a more advanced example, here we open the connection, overwrite the read dat
 ```go
 import (
   "fmt"
-  "github.com/joedursun/EventedConnection/connection"
+  "github.com/joedursun/EventedConnection"
 )
 
 func readFromConnection() {
   // NewConfig initializes a config struct with defaults
-  // NewEventedConnection will provide defaults if the config
+  // NewClient will provide defaults if the config
   // doesn't set them, so using NewConfig is optional
-  conf := connection.NewConfig()
+  conf := eventedconnection.NewConfig()
   conf.Endpoint = "localhost:5111"
   conf.AfterReadHook = func(data []byte) ([]byte, error) {
     fmt.Println("Data before processing ", string(data))
@@ -75,7 +75,7 @@ func readFromConnection() {
     return processed, nil
   }
 
-  con, err := connection.NewEventedConnection(&conf)
+  con, err := eventedconnection.NewClient(&conf)
   if err != nil {
     fmt.Println(err)
     return
