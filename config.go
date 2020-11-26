@@ -1,4 +1,4 @@
-package connection
+package eventedconnection
 
 import (
   "crypto/tls"
