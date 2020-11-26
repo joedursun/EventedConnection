@@ -1,3 +1,5 @@
+**Disclaimer: this is under active development. The API changes frequently for now and there are no tests until the API is more stable. This is not suitable for production yet!**
+
 ## EventedConnection
 
 EventedConnection is a wrapper around `net.Conn` that aims to simplify maintaining a long running connection.
