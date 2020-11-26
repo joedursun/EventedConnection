@@ -25,6 +25,9 @@ type EventedConnection struct {
   Connected            chan struct{}
 
   afterReadHook        AfterReadHook
+  afterConnectHook     AfterConnectHook
+  beforeDisconnectHook BeforeDisconnectHook
+  onErrorHook          OnErrorHook
 
   closer               sync.Once
   starter              sync.Once
@@ -68,11 +71,10 @@ func NewEventedConnection(conf *Config) (*EventedConnection, error) {
   conn.mutex = &sync.RWMutex{}
   conn.active = false
 
-  if conf.AfterReadHook != nil {
-    conn.afterReadHook = conf.AfterReadHook
-  } else {
-    conn.afterReadHook = defaultAfterReadHook
-  }
+  conn.afterReadHook = conf.AfterReadHook
+  conn.afterConnectHook = conf.AfterConnectHook
+  conn.beforeDisconnectHook = conf.BeforeDisconnectHook
+  conn.onErrorHook = conf.OnErrorHook
 
   return &conn, nil
 }
@@ -85,13 +87,19 @@ func (conn *EventedConnection) Connect() error {
   conn.starter.Do(func() {
     tcpConn, err = net.DialTimeout("tcp", conn.Endpoint, conn.ConnectionTimeout)
     if err != nil {
-      return
+      if conn.onErrorHook != nil { conn.onErrorHook(err) }
     }
 
     conn.mutex.Lock()
     conn.C = tcpConn
     conn.active = true
     conn.mutex.Unlock()
+
+    if conn.afterConnectHook != nil {
+      err = conn.afterConnectHook()
+      if err != nil && conn.onErrorHook != nil { conn.onErrorHook(err) }
+    }
+
     go conn.writeToConn()
     go conn.readFromConn()
     close(conn.Connected) // broadcast that TCP connection to interface was established
@@ -103,19 +111,24 @@ func (conn *EventedConnection) Connect() error {
 // Write provides a thread-safe way to send messages to the endpoint. If the connection is
 // nil (e.g. closed) then this is a noop.
 func (conn *EventedConnection) Write(data *[]byte) error {
+  var err error
+
   conn.mutex.RLock() // obtain lock before checking if connection is dead so value isn't changed while reading
   defer conn.mutex.RUnlock()
   if conn.C == nil {
-    return errors.New("connection is nil and data was not sent")
+    err = errors.New("called Write with nil connection")
+    if conn.onErrorHook != nil { conn.onErrorHook(err) }
+    return err
   }
 
   if conn.active {
     conn.writeChan <- data
   } else {
-    return errors.New("connection is not active and data was not sent")
+    err = errors.New("connection is not active and data was not sent")
+    if conn.onErrorHook != nil { conn.onErrorHook(err) }
   }
 
-  return nil
+  return err
 }
 
 // writeToConn receives messages on writeChan and writes them to the TCP connection. If any error occurs
@@ -129,6 +142,7 @@ func (conn *EventedConnection) writeToConn() {
     case data := <-conn.writeChan:
       err := conn.C.SetWriteDeadline(time.Now().Add(conn.WriteTimeout))
       if err != nil {
+        if conn.onErrorHook != nil { conn.onErrorHook(err) }
         return
       }
 
@@ -138,6 +152,7 @@ func (conn *EventedConnection) writeToConn() {
       conn.mutex.RUnlock()
 
       if err != nil {
+        if conn.onErrorHook != nil { conn.onErrorHook(err) }
         return
       }
     case <-conn.Disconnected:
@@ -153,6 +168,10 @@ func (conn *EventedConnection) Close() {
     conn.mutex.Lock()
     conn.active = false         // set "active" flag to false so we no longer queue up packets to send
 
+    if conn.beforeDisconnectHook != nil {
+      err := conn.beforeDisconnectHook()
+      if err != nil && conn.onErrorHook != nil { conn.onErrorHook(err) }
+    }
     if conn.C != nil {
       conn.C.Close()
     }
@@ -173,6 +192,7 @@ func (conn *EventedConnection) processResponse(data []byte) error {
   if len(data) > 0 {
     processed, err := conn.afterReadHook(data)
     if err != nil {
+      if conn.onErrorHook != nil { conn.onErrorHook(err) }
       return err
     }
     conn.Read <- &processed
@@ -189,12 +209,17 @@ func (conn *EventedConnection) readFromConn() error {
 
   buffer := make([]byte, conn.ReadBufferSize)
   for {
+    var err error
+
     if conn.C == nil {
-      return errors.New("unable to read from nil connection")
+      err = errors.New("unable to read from nil connection")
+      if conn.onErrorHook != nil { conn.onErrorHook(err) }
+      return err
     }
 
-    err := conn.C.SetReadDeadline(time.Now().Add(conn.ReadTimeout))
+    err = conn.C.SetReadDeadline(time.Now().Add(conn.ReadTimeout))
     if err != nil {
+      if conn.onErrorHook != nil { conn.onErrorHook(err) }
       return err
     }
 
@@ -207,6 +232,7 @@ func (conn *EventedConnection) readFromConn() error {
     }
 
     if err != nil {
+      if conn.onErrorHook != nil { conn.onErrorHook(err) }
       return err
     }
   }
