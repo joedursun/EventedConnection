@@ -11,10 +11,10 @@ import (
 // TCPReadTimeout sets the amount of time to wait for a packet from the endpoint before considering the connection dead
 const TCPReadTimeout = 1 * time.Hour
 
-// EventedConnection gives us a stable way to connect and maintain a connection to a TCP endpoint.
-// EventedConnection broadcasts 3 separate events via closing a channel: Connected and Disconnected.
+// Client gives us a stable way to connect and maintain a connection to a TCP endpoint.
+// Client broadcasts 3 separate events via closing a channel: Connected and Disconnected.
 // This allows any number of downstream consumers to be informed when a state change happens.
-type EventedConnection struct {
+type Client struct {
   C                    net.Conn
   ConnectionTimeout    time.Duration
   ReadTimeout          time.Duration
@@ -41,13 +41,13 @@ type EventedConnection struct {
   active               bool
 }
 
-// NewEventedConnection is the Connection constructor.
-func NewEventedConnection(conf *Config) (*EventedConnection, error) {
+// NewClient is the Connection constructor.
+func NewClient(conf *Config) (*Client, error) {
   if len(conf.Endpoint) == 0 {
     return nil, errors.New("Invalid endpoint (empty string)")
   }
 
-  conn := EventedConnection{}
+  conn := Client{}
   conn.Endpoint = conf.Endpoint
   if conf.ConnectionTimeout == 0 * time.Second { // default timeout for connecting
     conn.ConnectionTimeout = 30 * time.Second
@@ -89,7 +89,7 @@ func NewEventedConnection(conf *Config) (*EventedConnection, error) {
 }
 
 // Connect attempts to establish a TCP connection to conn.Endpoint.
-func (conn *EventedConnection) Connect() error {
+func (conn *Client) Connect() error {
   var err error
   var connection net.Conn
 
@@ -125,7 +125,7 @@ func (conn *EventedConnection) Connect() error {
 
 // Write provides a thread-safe way to send messages to the endpoint. If the connection is
 // nil (e.g. closed) then this is a noop.
-func (conn *EventedConnection) Write(data *[]byte) error {
+func (conn *Client) Write(data *[]byte) error {
   var err error
 
   conn.mutex.RLock() // obtain lock before checking if connection is dead so value isn't changed while reading
@@ -149,7 +149,7 @@ func (conn *EventedConnection) Write(data *[]byte) error {
 // writeToConn receives messages on writeChan and writes them to the TCP connection. If any error occurs
 // the connection is closed and this function returns. In the event of an intentional disconnect
 // event this function also returns.
-func (conn *EventedConnection) writeToConn() {
+func (conn *Client) writeToConn() {
   defer conn.Close()
 
   for {
@@ -181,7 +181,7 @@ func (conn *EventedConnection) writeToConn() {
 // Closes the conn.Disconnected chan prior to closing the TCP connection to allow
 // short-circuiting of downstream `select` blocks and avoid attempts to write to it
 // by the caller.
-func (conn *EventedConnection) Close() {
+func (conn *Client) Close() {
   conn.closer.Do(func() {
     conn.mutex.Lock()
     conn.active = false         // set "active" flag to false so we no longer queue up packets to send
@@ -202,13 +202,13 @@ func (conn *EventedConnection) Close() {
 }
 
 // Disconnect is an alias for conn.Close()
-func (conn *EventedConnection) Disconnect() {
+func (conn *Client) Disconnect() {
   conn.Close()
 }
 
 // processResponse handles data coming from TCP connection
 // and sends it through the conn.Read chan
-func (conn *EventedConnection) processResponse(data []byte) error {
+func (conn *Client) processResponse(data []byte) error {
   if len(data) > 0 {
     processed, err := conn.afterReadHook(data)
     if err != nil {
@@ -224,7 +224,7 @@ func (conn *EventedConnection) processResponse(data []byte) error {
 // readFromConn reads data from the connection into a buffer and then
 // passes onto processResponse. In the event of an error the connection
 // is closed.
-func (conn *EventedConnection) readFromConn() error {
+func (conn *Client) readFromConn() error {
   defer conn.Close()
 
   buffer := make([]byte, conn.ReadBufferSize)

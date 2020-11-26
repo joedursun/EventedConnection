@@ -20,12 +20,12 @@ type AfterConnectHook func() error
 
 // BeforeDisconnectHook is called just before a connection is terminated.
 // This hook is only called before a termination originating on this end of
-// the connection (ie. if EventedConnection.Endpoint closes the connection
+// the connection (ie. if Client.Endpoint closes the connection
 // or a timeout occurs then this hook is not called). Use the OnError callback
 // to handle those cases.
 type BeforeDisconnectHook func() error
 
-// OnErrorHook will be called whenever an error occurs within the scope of an EventedConnection
+// OnErrorHook will be called whenever an error occurs within the scope of an Client
 // method. Useful for logging or event notifications for example.
 type OnErrorHook func(error) error
 
@@ -34,7 +34,7 @@ func defaultAfterConnectHook() error { return nil }
 func defaultBeforeDisconnectHook() error { return nil }
 func defaultOnErrorHook(err error) error { return err }
 
-// Config - Struct for containing all configuration data for the EventedConnection
+// Config - Struct for containing all configuration data for the Client
 type Config struct {
   Endpoint              string `json:"endpoint"`
   ReadBufferSize        int    `json:"readBufferSize"`
