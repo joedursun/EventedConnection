@@ -11,8 +11,13 @@ cause a panic.
 
 ### Event hooks
 
-EventedConnection provides the Event hooks whose signatures can be found in `connection/config.go`:
-- `AfterReadHook`: called after reading data from the connection. Can be used to modify or filter received data or to throw an error if receiving something unexpected.
+EventedConnection provides the event hooks whose signatures can be found in `connection/config.go`:
+- `AfterReadHook`
+- `AfterConnectHook`
+- `BeforeDisconnectHook`
+- `OnErrorHook`
+
+Please refer to their docs for more information.
 
 ### Basic usage
 
