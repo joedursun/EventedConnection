@@ -163,20 +163,24 @@ func (conn *EventedConnection) writeToConn() {
 
 // Close closes the TCP connection. Broadcasts via the Disconnected channel.
 // Safe to call more than once, however will only close an open TCP connection on the first call.
+// Closes the conn.Disconnected chan prior to closing the TCP connection to allow
+// short-circuiting of downstream `select` blocks and avoid attempts to write to it
+// by the caller.
 func (conn *EventedConnection) Close() {
   conn.closer.Do(func() {
     conn.mutex.Lock()
     conn.active = false         // set "active" flag to false so we no longer queue up packets to send
+    close(conn.Disconnected)    // broadcast that TCP connection to interface was closed
 
     if conn.beforeDisconnectHook != nil {
       err := conn.beforeDisconnectHook()
       if err != nil && conn.onErrorHook != nil { conn.onErrorHook(err) }
     }
+
     if conn.C != nil {
       conn.C.Close()
     }
 
-    close(conn.Disconnected) // broadcast that TCP connection to interface was closed
     conn.mutex.Unlock()
   })
 }
