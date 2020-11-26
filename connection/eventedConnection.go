@@ -1,6 +1,7 @@
 package connection
 
 import (
+  "crypto/tls"
   "errors"
   "net"
   "sync"
@@ -28,6 +29,9 @@ type EventedConnection struct {
   afterConnectHook     AfterConnectHook
   beforeDisconnectHook BeforeDisconnectHook
   onErrorHook          OnErrorHook
+
+  useTLS               bool
+  tlsConfig            *tls.Config
 
   closer               sync.Once
   starter              sync.Once
@@ -64,6 +68,11 @@ func NewEventedConnection(conf *Config) (*EventedConnection, error) {
     conn.ReadBufferSize = 16 * 1024 // 16 KB
   }
 
+  if conf.UseTLS {
+    conn.tlsConfig = &conf.TLSConfig
+    conn.useTLS = conf.UseTLS
+  }
+
   conn.Disconnected = make(chan struct{}, 0)
   conn.Connected = make(chan struct{}, 0)
   conn.Read = make(chan *[]byte, 4) // buffer of 4 packets (up to 4 * conn.ReadBufferSize). reduces blocking when reading from connection
@@ -82,16 +91,22 @@ func NewEventedConnection(conf *Config) (*EventedConnection, error) {
 // Connect attempts to establish a TCP connection to conn.Endpoint.
 func (conn *EventedConnection) Connect() error {
   var err error
-  var tcpConn net.Conn
+  var connection net.Conn
 
   conn.starter.Do(func() {
-    tcpConn, err = net.DialTimeout("tcp", conn.Endpoint, conn.ConnectionTimeout)
+    if conn.useTLS {
+      connection, err = tls.Dial("tcp", conn.Endpoint, conn.tlsConfig)
+    } else {
+      connection, err = net.DialTimeout("tcp", conn.Endpoint, conn.ConnectionTimeout)
+    }
+
     if err != nil {
       if conn.onErrorHook != nil { conn.onErrorHook(err) }
+      return // return early so we don't execute other hooks, send Connected event, etc.
     }
 
     conn.mutex.Lock()
-    conn.C = tcpConn
+    conn.C = connection
     conn.active = true
     conn.mutex.Unlock()
 

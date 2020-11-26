@@ -1,6 +1,7 @@
 package connection
 
 import (
+  "crypto/tls"
   "encoding/json"
   "io"
   "log"
@@ -46,6 +47,9 @@ type Config struct {
   AfterConnectHook      AfterConnectHook
   BeforeDisconnectHook  BeforeDisconnectHook
   OnErrorHook           OnErrorHook
+
+  UseTLS                bool
+  TLSConfig             tls.Config
 }
 
 // jsonConfig is used as a temp struct to unmarshal JSON into in order to properly parse
