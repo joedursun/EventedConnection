@@ -170,15 +170,16 @@ func (conn *EventedConnection) Close() {
   conn.closer.Do(func() {
     conn.mutex.Lock()
     conn.active = false         // set "active" flag to false so we no longer queue up packets to send
-    close(conn.Disconnected)    // broadcast that TCP connection to interface was closed
 
     if conn.beforeDisconnectHook != nil {
       err := conn.beforeDisconnectHook()
       if err != nil && conn.onErrorHook != nil { conn.onErrorHook(err) }
     }
 
+    close(conn.Disconnected)    // broadcast that TCP connection to interface was closed
     if conn.C != nil {
       conn.C.Close()
+      conn.C = nil              // set C to nil so it's clear the connection cannot be used
     }
 
     conn.mutex.Unlock()
