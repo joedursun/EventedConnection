@@ -19,6 +19,11 @@ func TestNewClient_ConfigDefaults(t *testing.T) {
 
 	conf := Config{Endpoint: "localhost:5555"}
 	con, err = NewClient(&conf)
+
+	if err != nil {
+		t.Error("Expected err to be nil")
+	}
+
 	assertEqual(t, con.Endpoint, conf.Endpoint)
 	assertEqual(t, con.ConnectionTimeout, 30*time.Second)
 	assertEqual(t, con.ReadTimeout, 1*time.Hour)
