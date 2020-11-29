@@ -1,3 +1,5 @@
+<a href="https://goreportcard.com/report/github.com/joedursun/EventedConnection"><img src="https://goreportcard.com/badge/github.com/joedursun/EventedConnection" alt="Go Report Card" /></a>
+
 **Disclaimer: this is under active development. The API changes frequently for now and there are no tests until the API is more stable. This is not suitable for production yet!**
 
 ## EventedConnection
@@ -13,7 +15,7 @@ cause a panic.
 
 ### Event hooks
 
-EventedConnection provides the event hooks whose signatures can be found in `connection/config.go`:
+EventedConnection provides the event hooks whose signatures can be found in `config.go`:
 - `AfterReadHook`
 - `AfterConnectHook`
 - `BeforeDisconnectHook`
