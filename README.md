@@ -1,4 +1,4 @@
-<a href="https://goreportcard.com/report/github.com/joedursun/EventedConnection"><img src="https://goreportcard.com/badge/github.com/joedursun/EventedConnection" alt="Go Report Card" /></a>
+[![Go Report Card](https://goreportcard.com/badge/github.com/joedursun/EventedConnection)](https://goreportcard.com/report/github.com/joedursun/EventedConnection)
 
 **Disclaimer: this is under active development. The API changes frequently for now and there are no tests until the API is more stable. This is not suitable for production yet!**
 
