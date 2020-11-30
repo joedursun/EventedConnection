@@ -9,6 +9,18 @@ import (
 	"time"
 )
 
+// DefaultReadTimeout is the default duration to wait for a packet from the endpoint before considering the connection dead
+const DefaultReadTimeout = 1 * time.Hour
+
+// DefaultWriteTimeout is the default deadline for writing to the connection before timing out
+const DefaultWriteTimeout = 5 * time.Second
+
+// DefaultConnectionTimeout is the default timeout duration for establishing the connection
+const DefaultConnectionTimeout = 30 * time.Second
+
+// DefaultReadBufferSize is the default buffer length, in bytes, to read data from the connection before passing through the Read channel
+const DefaultReadBufferSize = 16 * 1024
+
 // AfterReadHook is a function that gets called after reading from the TCP connection.
 // Returning an error from this function is a signal to close the connection. If
 // instead the caller would like to know about the error but not close the connection,
@@ -91,14 +103,14 @@ func (conf *Config) Unmarshal(jsonBody io.Reader) error {
 }
 
 // NewConfig instantiates a config object with defaults
-func NewConfig() Config {
+func NewConfig() *Config {
 	l := log.New(os.Stderr, "", 0)
 
 	conf := Config{
-		ReadBufferSize:    16 * 1024, // 16 KB
-		ConnectionTimeout: 30 * time.Second,
-		ReadTimeout:       1 * time.Hour,
-		WriteTimeout:      5 * time.Second,
+		ReadBufferSize:    DefaultReadBufferSize,
+		ConnectionTimeout: DefaultConnectionTimeout,
+		ReadTimeout:       DefaultReadTimeout,
+		WriteTimeout:      DefaultWriteTimeout,
 
 		// Write to stderr by default
 		OnErrorHook: func(err error) error {
@@ -107,5 +119,5 @@ func NewConfig() Config {
 		},
 	}
 
-	return conf
+	return &conf
 }

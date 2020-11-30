@@ -8,9 +8,6 @@ import (
 	"time"
 )
 
-// TCPReadTimeout sets the amount of time to wait for a packet from the endpoint before considering the connection dead
-const TCPReadTimeout = 1 * time.Hour
-
 // Client gives us a stable way to connect and maintain a connection to a TCP endpoint.
 // Client broadcasts 3 separate events via closing a channel: Connected and Disconnected.
 // This allows any number of downstream consumers to be informed when a state change happens.
@@ -52,22 +49,22 @@ func NewClient(conf *Config) (*Client, error) {
 
 	conn.ConnectionTimeout = conf.ConnectionTimeout
 	if conf.ConnectionTimeout == 0*time.Second { // default timeout for connecting
-		conn.ConnectionTimeout = 30 * time.Second
+		conn.ConnectionTimeout = DefaultConnectionTimeout
 	}
 
 	conn.ReadTimeout = conf.ReadTimeout
 	if conf.ReadTimeout == 0*time.Second { // default timeout for receiving data
-		conn.ReadTimeout = 1 * time.Hour
+		conn.ReadTimeout = DefaultReadTimeout
 	}
 
 	conn.WriteTimeout = conf.WriteTimeout
 	if conf.WriteTimeout == 0*time.Second { // default timeout for sending data
-		conn.WriteTimeout = 5 * time.Second
+		conn.WriteTimeout = DefaultWriteTimeout
 	}
 
 	conn.ReadBufferSize = conf.ReadBufferSize
 	if conf.ReadBufferSize == 0 {
-		conn.ReadBufferSize = 16 * 1024 // 16 KB
+		conn.ReadBufferSize = DefaultReadBufferSize
 	}
 
 	if conf.UseTLS {
