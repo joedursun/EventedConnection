@@ -49,6 +49,8 @@ func NewClient(conf *Config) (*Client, error) {
 
 	conn := Client{}
 	conn.Endpoint = conf.Endpoint
+
+	conn.ConnectionTimeout = conf.ConnectionTimeout
 	if conf.ConnectionTimeout == 0*time.Second { // default timeout for connecting
 		conn.ConnectionTimeout = 30 * time.Second
 	}
