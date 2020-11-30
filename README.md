@@ -38,7 +38,7 @@ import (
 
 func sendHelloWorld() {
   conf := eventedconnection.Config{ Endpoint: "localhost:5111" }
-  con, err := eventedconnection.NewClient(&conf)
+  con, err := eventedconnection.NewClient(conf)
 
   if err != nil {
     fmt.Println(err)
@@ -78,7 +78,7 @@ func readFromConnection() {
     return processed, nil
   }
 
-  con, err := eventedconnection.NewClient(&conf)
+  con, err := eventedconnection.NewClient(conf)
   if err != nil {
     fmt.Println(err)
     return

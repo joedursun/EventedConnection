@@ -12,21 +12,23 @@ import (
 // Client broadcasts 3 separate events via closing a channel: Connected and Disconnected.
 // This allows any number of downstream consumers to be informed when a state change happens.
 type Client struct {
-	C                 net.Conn
-	ConnectionTimeout time.Duration
-	ReadTimeout       time.Duration
-	WriteTimeout      time.Duration
-	Endpoint          string
-	ReadBufferSize    int
-	Read              chan *[]byte
-	Disconnected      chan struct{}
-	Connected         chan struct{}
+	Read         chan *[]byte
+	Disconnected chan struct{}
+	Connected    chan struct{}
+
+	c                 net.Conn
+	connectionTimeout time.Duration
+	readTimeout       time.Duration
+	writeTimeout      time.Duration
+	endpoint          string
+	readBufferSize    int
 
 	afterReadHook        AfterReadHook
 	afterConnectHook     AfterConnectHook
 	beforeDisconnectHook BeforeDisconnectHook
 	onErrorHook          OnErrorHook
 
+	active    bool
 	useTLS    bool
 	tlsConfig *tls.Config
 
@@ -35,7 +37,6 @@ type Client struct {
 
 	writeChan chan *[]byte
 	mutex     *sync.RWMutex // allows for using this connection in multiple goroutines
-	active    bool
 }
 
 // NewClient is the Connection constructor.
@@ -45,26 +46,26 @@ func NewClient(conf *Config) (*Client, error) {
 	}
 
 	conn := Client{}
-	conn.Endpoint = conf.Endpoint
+	conn.endpoint = conf.Endpoint
 
-	conn.ConnectionTimeout = conf.ConnectionTimeout
+	conn.connectionTimeout = conf.ConnectionTimeout
 	if conf.ConnectionTimeout == 0*time.Second { // default timeout for connecting
-		conn.ConnectionTimeout = DefaultConnectionTimeout
+		conn.connectionTimeout = DefaultConnectionTimeout
 	}
 
-	conn.ReadTimeout = conf.ReadTimeout
+	conn.readTimeout = conf.ReadTimeout
 	if conf.ReadTimeout == 0*time.Second { // default timeout for receiving data
-		conn.ReadTimeout = DefaultReadTimeout
+		conn.readTimeout = DefaultReadTimeout
 	}
 
-	conn.WriteTimeout = conf.WriteTimeout
+	conn.writeTimeout = conf.WriteTimeout
 	if conf.WriteTimeout == 0*time.Second { // default timeout for sending data
-		conn.WriteTimeout = DefaultWriteTimeout
+		conn.writeTimeout = DefaultWriteTimeout
 	}
 
-	conn.ReadBufferSize = conf.ReadBufferSize
+	conn.readBufferSize = conf.ReadBufferSize
 	if conf.ReadBufferSize == 0 {
-		conn.ReadBufferSize = DefaultReadBufferSize
+		conn.readBufferSize = DefaultReadBufferSize
 	}
 
 	if conf.UseTLS {
@@ -94,9 +95,9 @@ func (conn *Client) Connect() error {
 
 	conn.starter.Do(func() {
 		if conn.useTLS {
-			connection, err = tls.Dial("tcp", conn.Endpoint, conn.tlsConfig)
+			connection, err = tls.Dial("tcp", conn.endpoint, conn.tlsConfig)
 		} else {
-			connection, err = net.DialTimeout("tcp", conn.Endpoint, conn.ConnectionTimeout)
+			connection, err = net.DialTimeout("tcp", conn.endpoint, conn.connectionTimeout)
 		}
 
 		if err != nil {
@@ -107,7 +108,7 @@ func (conn *Client) Connect() error {
 		}
 
 		conn.mutex.Lock()
-		conn.C = connection
+		conn.c = connection
 		conn.active = true
 		conn.mutex.Unlock()
 
@@ -133,7 +134,7 @@ func (conn *Client) Write(data *[]byte) error {
 
 	conn.mutex.RLock() // obtain lock before checking if connection is dead so value isn't changed while reading
 	defer conn.mutex.RUnlock()
-	if conn.C == nil {
+	if conn.c == nil {
 		err = errors.New("called Write with nil connection")
 		if conn.onErrorHook != nil {
 			conn.onErrorHook(err)
@@ -162,7 +163,7 @@ func (conn *Client) writeToConn() {
 	for {
 		select {
 		case data := <-conn.writeChan:
-			err := conn.C.SetWriteDeadline(time.Now().Add(conn.WriteTimeout))
+			err := conn.c.SetWriteDeadline(time.Now().Add(conn.writeTimeout))
 			if err != nil {
 				if conn.onErrorHook != nil {
 					conn.onErrorHook(err)
@@ -172,7 +173,7 @@ func (conn *Client) writeToConn() {
 
 			// Obtain lock so that conn.C is not closed while attempting to write
 			conn.mutex.RLock()
-			_, err = conn.C.Write(*data)
+			_, err = conn.c.Write(*data)
 			conn.mutex.RUnlock()
 
 			if err != nil {
@@ -205,9 +206,9 @@ func (conn *Client) Close() {
 		}
 
 		close(conn.Disconnected) // broadcast that TCP connection to interface was closed
-		if conn.C != nil {
-			conn.C.Close()
-			conn.C = nil // set C to nil so it's clear the connection cannot be used
+		if conn.c != nil {
+			conn.c.Close()
+			conn.c = nil // set C to nil so it's clear the connection cannot be used
 		}
 
 		conn.mutex.Unlock()
@@ -242,11 +243,11 @@ func (conn *Client) processResponse(data []byte) error {
 func (conn *Client) readFromConn() error {
 	defer conn.Close()
 
-	buffer := make([]byte, conn.ReadBufferSize)
+	buffer := make([]byte, conn.readBufferSize)
 	for {
 		var err error
 
-		if conn.C == nil {
+		if conn.c == nil {
 			err = errors.New("unable to read from nil connection")
 			if conn.onErrorHook != nil {
 				conn.onErrorHook(err)
@@ -254,7 +255,7 @@ func (conn *Client) readFromConn() error {
 			return err
 		}
 
-		err = conn.C.SetReadDeadline(time.Now().Add(conn.ReadTimeout))
+		err = conn.c.SetReadDeadline(time.Now().Add(conn.readTimeout))
 		if err != nil {
 			if conn.onErrorHook != nil {
 				conn.onErrorHook(err)
@@ -262,7 +263,7 @@ func (conn *Client) readFromConn() error {
 			return err
 		}
 
-		numBytesRead, err := conn.C.Read(buffer)
+		numBytesRead, err := conn.c.Read(buffer)
 		if numBytesRead > 0 {
 			res := make([]byte, numBytesRead)
 			// Copy the buffer so it's safe to pass along
