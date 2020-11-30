@@ -24,11 +24,11 @@ func TestNewClient_Config(t *testing.T) {
 		t.Error("Expected err to be nil")
 	}
 
-	assertEqual(t, con.Endpoint, conf.Endpoint)
-	assertEqual(t, con.ConnectionTimeout, 30*time.Second)
-	assertEqual(t, con.ReadTimeout, 1*time.Hour)
-	assertEqual(t, con.WriteTimeout, 5*time.Second)
-	assertEqual(t, con.ReadBufferSize, 16*1024)
+	assertEqual(t, con.GetEndpoint(), conf.Endpoint)
+	assertEqual(t, con.GetConnectionTimeout(), 30*time.Second)
+	assertEqual(t, con.GetReadTimeout(), 1*time.Hour)
+	assertEqual(t, con.GetWriteTimeout(), 5*time.Second)
+	assertEqual(t, con.GetReadBufferSize(), 16*1024)
 
 	conf = Config{
 		Endpoint:          "localhost:5555",
@@ -43,11 +43,11 @@ func TestNewClient_Config(t *testing.T) {
 		t.Error("Expected err to be nil")
 	}
 
-	assertEqual(t, con.Endpoint, conf.Endpoint)
-	assertEqual(t, con.ConnectionTimeout, conf.ConnectionTimeout)
-	assertEqual(t, con.ReadTimeout, conf.ReadTimeout)
-	assertEqual(t, con.WriteTimeout, conf.WriteTimeout)
-	assertEqual(t, con.ReadBufferSize, 2*1024)
+	assertEqual(t, con.GetEndpoint(), conf.Endpoint)
+	assertEqual(t, con.GetConnectionTimeout(), conf.ConnectionTimeout)
+	assertEqual(t, con.GetReadTimeout(), conf.ReadTimeout)
+	assertEqual(t, con.GetWriteTimeout(), conf.WriteTimeout)
+	assertEqual(t, con.GetReadBufferSize(), 2*1024)
 }
 
 func assertEqual(t *testing.T, a interface{}, b interface{}) {

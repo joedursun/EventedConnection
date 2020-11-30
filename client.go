@@ -279,3 +279,28 @@ func (conn *Client) readFromConn() error {
 		}
 	}
 }
+
+// GetEndpoint returns the value of conn.endpoint
+func (conn *Client) GetEndpoint() string {
+	return conn.endpoint
+}
+
+// GetReadBufferSize returns the value of conn.readBufferSize
+func (conn *Client) GetReadBufferSize() int {
+	return conn.readBufferSize
+}
+
+// GetWriteTimeout returns the value of conn.writeTimeout
+func (conn *Client) GetWriteTimeout() time.Duration {
+	return conn.writeTimeout
+}
+
+// GetReadTimeout returns the value of conn.readTimeout
+func (conn *Client) GetReadTimeout() time.Duration {
+	return conn.readTimeout
+}
+
+// GetConnectionTimeout returns the value of conn.connectionTimeout
+func (conn *Client) GetConnectionTimeout() time.Duration {
+	return conn.connectionTimeout
+}
