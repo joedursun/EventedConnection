@@ -83,7 +83,11 @@ func NewClient(conf *Config) (*Client, error) {
 	conn.afterReadHook = conf.AfterReadHook
 	conn.afterConnectHook = conf.AfterConnectHook
 	conn.beforeDisconnectHook = conf.BeforeDisconnectHook
+
 	conn.onErrorHook = conf.OnErrorHook
+	if conf.OnErrorHook == nil {
+		conn.onErrorHook = defaultOnErrorHook
+	}
 
 	return &conn, nil
 }
@@ -101,9 +105,7 @@ func (conn *Client) Connect() error {
 		}
 
 		if err != nil {
-			if conn.onErrorHook != nil {
-				conn.onErrorHook(err)
-			}
+			conn.onErrorHook(err)
 			return // return early so we don't execute other hooks, send Connected event, etc.
 		}
 
@@ -125,7 +127,7 @@ func (conn *Client) Connect() error {
 func (conn *Client) afterConnect() {
 	if conn.afterConnectHook != nil {
 		err := conn.afterConnectHook()
-		if err != nil && conn.onErrorHook != nil {
+		if err != nil {
 			conn.onErrorHook(err)
 		}
 	}
@@ -145,9 +147,7 @@ func (conn *Client) Write(data *[]byte) error {
 	defer conn.mutex.RUnlock()
 	if conn.c == nil {
 		err = errors.New("called Write with nil connection")
-		if conn.onErrorHook != nil {
-			conn.onErrorHook(err)
-		}
+		conn.onErrorHook(err)
 		return err
 	}
 
@@ -155,9 +155,7 @@ func (conn *Client) Write(data *[]byte) error {
 		conn.writeChan <- data
 	} else {
 		err = errors.New("connection is not active and data was not sent")
-		if conn.onErrorHook != nil {
-			conn.onErrorHook(err)
-		}
+		conn.onErrorHook(err)
 	}
 
 	return err
@@ -174,9 +172,7 @@ func (conn *Client) writeToConn() {
 		case data := <-conn.writeChan:
 			err := conn.c.SetWriteDeadline(time.Now().Add(conn.writeTimeout))
 			if err != nil {
-				if conn.onErrorHook != nil {
-					conn.onErrorHook(err)
-				}
+				conn.onErrorHook(err)
 				return
 			}
 
@@ -186,9 +182,7 @@ func (conn *Client) writeToConn() {
 			conn.mutex.RUnlock()
 
 			if err != nil {
-				if conn.onErrorHook != nil {
-					conn.onErrorHook(err)
-				}
+				conn.onErrorHook(err)
 				return
 			}
 		case <-conn.Disconnected:
@@ -210,7 +204,7 @@ func (conn *Client) Close() {
 
 		if conn.beforeDisconnectHook != nil {
 			err := conn.beforeDisconnectHook()
-			if err != nil && conn.onErrorHook != nil {
+			if err != nil {
 				conn.onErrorHook(err)
 			}
 		}
@@ -234,9 +228,7 @@ func (conn *Client) processResponse(data []byte) error {
 	if len(data) > 0 {
 		processed, err := conn.afterReadHook(data)
 		if err != nil {
-			if conn.onErrorHook != nil {
-				conn.onErrorHook(err)
-			}
+			conn.onErrorHook(err)
 			return err
 		}
 		conn.Read <- &processed
@@ -257,17 +249,13 @@ func (conn *Client) readFromConn() error {
 
 		if conn.c == nil {
 			err = errors.New("unable to read from nil connection")
-			if conn.onErrorHook != nil {
-				conn.onErrorHook(err)
-			}
+			conn.onErrorHook(err)
 			return err
 		}
 
 		err = conn.c.SetReadDeadline(time.Now().Add(conn.readTimeout))
 		if err != nil {
-			if conn.onErrorHook != nil {
-				conn.onErrorHook(err)
-			}
+			conn.onErrorHook(err)
 			return err
 		}
 
@@ -280,9 +268,7 @@ func (conn *Client) readFromConn() error {
 		}
 
 		if err != nil {
-			if conn.onErrorHook != nil {
-				conn.onErrorHook(err)
-			}
+			conn.onErrorHook(err)
 			return err
 		}
 	}
