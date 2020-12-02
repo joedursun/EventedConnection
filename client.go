@@ -124,7 +124,7 @@ func (conn *Client) Connect() error {
 
 func (conn *Client) afterConnect() {
 	if conn.afterConnectHook != nil {
-		err = conn.afterConnectHook()
+		err := conn.afterConnectHook()
 		if err != nil && conn.onErrorHook != nil {
 			conn.onErrorHook(err)
 		}
