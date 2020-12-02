@@ -1,7 +1,7 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/joedursun/EventedConnection)](https://goreportcard.com/report/github.com/joedursun/EventedConnection)
 [![PkgGoDev](https://pkg.go.dev/badge/github.com/joedursun/EventedConnection)](https://pkg.go.dev/github.com/joedursun/EventedConnection)
 
-**Disclaimer: this is under active development. The API changes frequently for now and there are no tests until the API is more stable. This is not suitable for production yet!**
+**Disclaimer: this is under active development. The API changes frequently for now and there are few tests until the API is more stable. This is not suitable for production yet!**
 
 ## EventedConnection
 
@@ -13,6 +13,12 @@ EventedConnection provides a way to safely read and write to a TCP connection us
 in a thread-safe way. For example, calling `Close()` on the connection will close the TCP connection
 and any subsequent calls will be ignored, so calling `Close()` in any number of goroutines will not
 cause a panic.
+
+### Performance
+
+Benchmarks are included as part of the test suite so you can verify if eventedconnection will be suitable for your needs.
+
+When tested on a 3.1 GHz Dual-Core Intel Core i5 2017 Macbook Pro it was able to write and subsequently read 32 KB of data in `~77500ns` (or `0.0000775s`) to localhost. Of course when using this to connect to remote hosts there will be much higher latency and other bandwidth constraints, but this serves as evidence of the low overhead cost of this library.
 
 ### Event hooks
 
