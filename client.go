@@ -81,6 +81,10 @@ func NewClient(conf *Config) (*Client, error) {
 	conn.active = false
 
 	conn.afterReadHook = conf.AfterReadHook
+	if conf.AfterReadHook == nil {
+		conn.afterReadHook = defaultAfterReadHook
+	}
+
 	conn.afterConnectHook = conf.AfterConnectHook
 	conn.beforeDisconnectHook = conf.BeforeDisconnectHook
 

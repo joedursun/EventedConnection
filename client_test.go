@@ -3,6 +3,7 @@ package eventedconnection_test
 import (
 	. "github.com/joedursun/EventedConnection"
 	"github.com/joedursun/EventedConnection/testutils"
+	"math/rand"
 	"testing"
 	"time"
 )
@@ -127,6 +128,47 @@ func TestNewClient_Connect_Fail(t *testing.T) {
 	_ = con.Connect()
 	assertEqual(t, numTimesConnected, 0)
 	assertEqual(t, numErrors, 1)
+	close(done)
+}
+
+func BenchmarkThroughput(b *testing.B) {
+	done := make(chan bool)
+	l, err := testutils.MockListener(done)
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	conf := Config{Endpoint: l.Addr().String()}
+	con, err := NewClient(&conf)
+	if err != nil {
+		b.Fatal("Expected err to be nil")
+	}
+
+	err = con.Connect()
+	defer con.Close()
+	if err != nil {
+		b.Fatal("Received error connecting to endpoint during benchmark.")
+	}
+
+	payloadSize := 32 * 1024
+	payload := make([]byte, payloadSize) // 32 KB of random bytes; twice the read-buffer size
+	rand.Read(payload)
+	nextIter := make(chan int)
+
+	for i := 0; i < b.N; i++ {
+		go func(conn *Client, nextIter chan int, i int) {
+			totalBytes := 0
+			for data := range conn.Read {
+				totalBytes += len(*data)
+				if totalBytes == payloadSize {
+					break
+				}
+			}
+			nextIter <- i
+		}(con, nextIter, i)
+		con.Write(&payload)
+		<-nextIter
+	}
 	close(done)
 }
 
