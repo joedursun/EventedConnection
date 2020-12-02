@@ -200,6 +200,7 @@ func (conn *Client) writeToConn() {
 func (conn *Client) Close() {
 	conn.closer.Do(func() {
 		conn.mutex.Lock()
+		defer conn.mutex.Unlock()
 		conn.active = false // set "active" flag to false so we no longer queue up packets to send
 
 		if conn.beforeDisconnectHook != nil {
@@ -214,8 +215,6 @@ func (conn *Client) Close() {
 			conn.c.Close()
 			conn.c = nil // set C to nil so it's clear the connection cannot be used
 		}
-
-		conn.mutex.Unlock()
 	})
 }
 
