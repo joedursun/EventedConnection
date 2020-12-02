@@ -9,7 +9,7 @@ import (
 )
 
 // Client gives us a stable way to connect and maintain a connection to a TCP endpoint.
-// Client broadcasts 3 separate events via closing a channel: Connected and Disconnected.
+// Client broadcasts 2 separate events via closing a channel: Connected and Disconnected.
 // This allows any number of downstream consumers to be informed when a state change happens.
 type Client struct {
 	Read         chan *[]byte
