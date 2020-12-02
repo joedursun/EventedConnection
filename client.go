@@ -112,12 +112,7 @@ func (conn *Client) Connect() error {
 		conn.active = true
 		conn.mutex.Unlock()
 
-		if conn.afterConnectHook != nil {
-			err = conn.afterConnectHook()
-			if err != nil && conn.onErrorHook != nil {
-				conn.onErrorHook(err)
-			}
-		}
+		conn.afterConnect()
 
 		go conn.writeToConn()
 		go conn.readFromConn()
@@ -125,6 +120,15 @@ func (conn *Client) Connect() error {
 		return
 	})
 	return err
+}
+
+func (conn *Client) afterConnect() {
+	if conn.afterConnectHook != nil {
+		err = conn.afterConnectHook()
+		if err != nil && conn.onErrorHook != nil {
+			conn.onErrorHook(err)
+		}
+	}
 }
 
 // Write provides a thread-safe way to send messages to the endpoint. If the connection is
