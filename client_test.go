@@ -87,7 +87,7 @@ func TestNewClient_Connect_Success(t *testing.T) {
 	assertEqual(t, numErrors, 0)
 
 	// Check to make sure that only one attempt was ever made
-	err = con.Connect()
+	_ = con.Connect()
 	assertEqual(t, numTimesConnected, 1)
 	assertEqual(t, numErrors, 0)
 	close(done)
@@ -124,7 +124,7 @@ func TestNewClient_Connect_Fail(t *testing.T) {
 	assertEqual(t, numErrors, 1)
 
 	// Check to make sure that only one attempt was ever made
-	err = con.Connect()
+	_ = con.Connect()
 	assertEqual(t, numTimesConnected, 0)
 	assertEqual(t, numErrors, 1)
 	close(done)
