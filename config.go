@@ -22,8 +22,9 @@ const DefaultConnectionTimeout = 30 * time.Second
 const DefaultReadBufferSize = 16 * 1024
 
 // AfterReadHook is a function that gets called after reading from the TCP connection.
-// Returning an error from this function is a signal to close the connection. If
-// instead the caller would like to know about the error but not close the connection,
+// Use this function to modify data read from the endpoint, write to a log, etc.
+// Returning an error from this function is a signal to close the connection.
+// If instead the caller would like to know about the error but not close the connection,
 // then, for example, AfterReadHook could send the error on a channel.
 type AfterReadHook func([]byte) ([]byte, error)
 
