@@ -1,8 +1,6 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/joedursun/EventedConnection)](https://goreportcard.com/report/github.com/joedursun/EventedConnection)
 [![PkgGoDev](https://pkg.go.dev/badge/github.com/joedursun/EventedConnection)](https://pkg.go.dev/github.com/joedursun/EventedConnection)
 
-**Disclaimer: this is under active development. The API changes frequently for now and there are few tests until the API is more stable. This is not suitable for production yet!**
-
 ## EventedConnection
 
 EventedConnection is a wrapper around `net.Conn` that aims to simplify maintaining a long running connection.
