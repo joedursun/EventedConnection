@@ -1,5 +1,6 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/joedursun/EventedConnection)](https://goreportcard.com/report/github.com/joedursun/EventedConnection)
 [![PkgGoDev](https://pkg.go.dev/badge/github.com/joedursun/EventedConnection)](https://pkg.go.dev/github.com/joedursun/EventedConnection)
+[![Build Status](https://travis-ci.org/joedursun/EventedConnection.svg?branch=main)](https://travis-ci.org/joedursun/EventedConnection)
 
 ## EventedConnection
 
