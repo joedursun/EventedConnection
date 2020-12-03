@@ -54,7 +54,7 @@ func TestNewClient_Config(t *testing.T) {
 
 // TestNewClient_Connect_Success tests that a connection can be successfully established and that
 // the appropriate callbacks are called.
-func TestNewClient_Connect_Success(t *testing.T) {
+func TestClient_Connect_Success(t *testing.T) {
 	done := make(chan bool)
 	l, err := testutils.MockListener(done)
 	if err != nil {
@@ -95,7 +95,7 @@ func TestNewClient_Connect_Success(t *testing.T) {
 }
 
 // TestNewClient_Connect_Error tests that an error is returned under appropriate conditions
-func TestNewClient_Connect_Fail(t *testing.T) {
+func TestClient_Connect_Fail(t *testing.T) {
 	done := make(chan bool)
 	numTimesConnected := 0 // used for counting how many attempts were made to connect to the endpoint
 	numErrors := 0         // let's count how many errors were reported
@@ -128,6 +128,47 @@ func TestNewClient_Connect_Fail(t *testing.T) {
 	_ = con.Connect()
 	assertEqual(t, numTimesConnected, 0)
 	assertEqual(t, numErrors, 1)
+	close(done)
+}
+
+func TestClient_Close(t *testing.T) {
+	done := make(chan bool)
+	l, err := testutils.MockListener(done)
+	if err != nil {
+		t.Error(err)
+	}
+
+	calledDisconnectHook := false
+	conf := Config{
+		Endpoint: l.Addr().String(),
+		BeforeDisconnectHook: func() error {
+			calledDisconnectHook = true
+			return nil
+		},
+	}
+
+	con, err := NewClient(&conf)
+	if err != nil {
+		t.Error("Expected err to be nil")
+	}
+
+	err = con.Connect()
+	if err != nil {
+		t.Error("Received error when connecting.")
+	}
+
+	assertEqual(t, con.IsActive(), true)
+	payload := []byte("test")
+	err = con.Write(&payload)
+	assertEqual(t, err, nil)
+	con.Close()
+	assertEqual(t, con.IsActive(), false)
+	assertEqual(t, calledDisconnectHook, true)
+
+	err = con.Write(&payload)
+	assertNotNil(t, err)
+	con.Close() // call again to test if it panics
+
 	close(done)
 }
 

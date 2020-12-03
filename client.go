@@ -174,7 +174,10 @@ func (conn *Client) writeToConn() {
 	for {
 		select {
 		case data := <-conn.writeChan:
+			conn.mutex.RLock()
 			err := conn.c.SetWriteDeadline(time.Now().Add(conn.writeTimeout))
+			conn.mutex.RUnlock()
+
 			if err != nil {
 				conn.onErrorHook(err)
 				return
@@ -251,12 +254,15 @@ func (conn *Client) readFromConn() error {
 	for {
 		var err error
 
+		conn.mutex.RLock()
 		if conn.c == nil {
+			conn.mutex.RUnlock()
 			err = errors.New("unable to read from nil connection")
 			conn.onErrorHook(err)
 			return err
 		}
 
+		conn.mutex.RUnlock()
 		err = conn.c.SetReadDeadline(time.Now().Add(conn.readTimeout))
 		if err != nil {
 			conn.onErrorHook(err)
