@@ -114,3 +114,13 @@ func readFromConnection() {
   }
 }
 ```
+
+### Testing
+
+In order to test connecting/reading/writing to an endpoint, the tests make use of a simple `net.Listener` which listens on a randomly chosen available port. If you plan to run the tests be sure to allow this behavior or you'll see many spurious failures.
+
+To run the tests: `go test -v`
+
+If you want to run the benchmarks along with the tests: `go test -v -bench=.`
+
+If you only want to run the benchmarks: `go test -v -run=Bench -bench=.`
