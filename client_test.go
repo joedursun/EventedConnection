@@ -282,16 +282,21 @@ func TestClient_ReadWrite(t *testing.T) {
 
 func TestClient_Timeouts(t *testing.T) {
 	done := make(chan bool)
-	l, err := testutils.FlakyServer(done, 1*time.Second, 1*time.Second) // delay connection by 1 second, reading data by 1 second
+	l, err := testutils.FlakyServer(done, 100*time.Millisecond, 100*time.Millisecond)
 	if err != nil {
 		t.Error(err)
 	}
 
+	dataWasRead := false
 	conf := Config{
 		Endpoint:          l.Addr().String(),
-		ConnectionTimeout: 100 * time.Millisecond,
-		ReadTimeout:       100 * time.Millisecond,
-		WriteTimeout:      100 * time.Millisecond,
+		ConnectionTimeout: 1 * time.Millisecond,
+		ReadTimeout:       1 * time.Millisecond,
+		WriteTimeout:      1 * time.Millisecond,
+		AfterReadHook: func(data []byte) ([]byte, error) {
+			dataWasRead = true
+			return data, nil
+		},
 	}
 
 	con, err := NewClient(&conf)
@@ -318,6 +323,52 @@ func TestClient_Timeouts(t *testing.T) {
 	select {
 	case <-con.Disconnected: // should receive the disconnected signal due to read timeout
 		assertEqual(t, con.IsActive(), false)
+		assertEqual(t, dataWasRead, false)
+	case <-time.After(2 * time.Second):
+		t.Error("Test timed out while waiting to read from connection")
+	}
+
+	con.Close()
+
+	dataWasRead = false
+	conf = Config{
+		Endpoint:          l.Addr().String(),
+		ConnectionTimeout: 1 * time.Second,
+		ReadTimeout:       1 * time.Second,
+		WriteTimeout:      1 * time.Second,
+		AfterReadHook: func(data []byte) ([]byte, error) {
+			dataWasRead = true
+			return data, nil
+		},
+	}
+
+	con, err = NewClient(&conf)
+	if err != nil {
+		t.Error("Expected err to be nil")
+	}
+
+	assertEqual(t, con.GetReadTimeout(), conf.ReadTimeout)
+	assertEqual(t, con.GetWriteTimeout(), conf.WriteTimeout)
+
+	err = con.Connect()
+	if err != nil {
+		t.Error("Received unexpected error when connecting.", err)
+	}
+
+	assertEqual(t, con.IsActive(), true)
+
+	payload = []byte("Testing timeouts")
+	err = con.Write(&payload)
+	if err != nil {
+		t.Error(err)
+	}
+
+	select {
+	case <-con.Disconnected:
+		t.Error("Received disconnect signal unexpectedly")
+	case data := <-con.Read:
+		assertEqual(t, dataWasRead, true)
+		assertEqual(t, string(*data), string(payload))
 	case <-time.After(2 * time.Second):
 		t.Error("Test timed out while waiting to read from connection")
 	}

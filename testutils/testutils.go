@@ -67,6 +67,7 @@ func FlakyServer(done chan bool, connectDelay, readDelay time.Duration) (net.Lis
 				}
 
 				go func(c net.Conn) {
+					<-time.After(readDelay)
 					io.Copy(c, c)
 					c.Close()
 				}(conn)
