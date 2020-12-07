@@ -69,7 +69,7 @@ func NewClient(conf *Config) (*Client, error) {
 	}
 
 	if conf.UseTLS {
-		conn.tlsConfig = &conf.TLSConfig
+		conn.tlsConfig = conf.TLSConfig
 		conn.useTLS = conf.UseTLS
 	}
 

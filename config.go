@@ -62,7 +62,7 @@ type Config struct {
 	OnErrorHook          OnErrorHook
 
 	UseTLS    bool
-	TLSConfig tls.Config
+	TLSConfig *tls.Config
 }
 
 // jsonConfig is used as a temp struct to unmarshal JSON into in order to properly parse
