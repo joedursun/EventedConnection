@@ -35,8 +35,7 @@ type Client struct {
 	closer  sync.Once
 	starter sync.Once
 
-	writeChan chan *[]byte
-	mutex     *sync.RWMutex // allows for using this connection in multiple goroutines
+	mutex *sync.RWMutex // allows for using this connection in multiple goroutines
 }
 
 // NewClient is the Connection constructor.
@@ -75,8 +74,7 @@ func NewClient(conf *Config) (*Client, error) {
 
 	conn.Disconnected = make(chan struct{}, 0)
 	conn.Connected = make(chan struct{}, 0)
-	conn.Read = make(chan *[]byte, 4)   // buffer of 4 packets (up to 4 * conn.ReadBufferSize). reduces blocking when reading from connection
-	conn.writeChan = make(chan *[]byte) // not buffered so that the Write method can block and the caller will know if the write was successful or not
+	conn.Read = make(chan *[]byte, 4) // buffer of 4 packets (up to 4 * conn.ReadBufferSize). reduces blocking when reading from connection
 	conn.mutex = &sync.RWMutex{}
 	conn.active = false
 
@@ -120,10 +118,8 @@ func (conn *Client) Connect() error {
 
 		conn.afterConnect()
 
-		go conn.writeToConn()
 		go conn.readFromConn()
 		close(conn.Connected) // broadcast that TCP connection to interface was established
-		return
 	})
 	return err
 }
@@ -156,46 +152,22 @@ func (conn *Client) Write(data *[]byte) error {
 	}
 
 	if conn.active {
-		conn.writeChan <- data
+		err = conn.c.SetWriteDeadline(time.Now().Add(conn.writeTimeout))
+		if err != nil {
+			conn.onErrorHook(err)
+			return err
+		}
+		_, err = conn.c.Write(*data)
+		if err != nil {
+			conn.onErrorHook(err)
+			return err
+		}
 	} else {
 		err = errors.New("connection is not active and data was not sent")
 		conn.onErrorHook(err)
 	}
 
 	return err
-}
-
-// writeToConn receives messages on writeChan and writes them to the TCP connection. If any error occurs
-// the connection is closed and this function returns. In the event of an intentional disconnect
-// event this function also returns.
-func (conn *Client) writeToConn() {
-	defer conn.Close()
-
-	for {
-		select {
-		case data := <-conn.writeChan:
-			conn.mutex.RLock()
-			err := conn.c.SetWriteDeadline(time.Now().Add(conn.writeTimeout))
-			conn.mutex.RUnlock()
-
-			if err != nil {
-				conn.onErrorHook(err)
-				return
-			}
-
-			// Obtain lock so that conn.C is not closed while attempting to write
-			conn.mutex.RLock()
-			_, err = conn.c.Write(*data)
-			conn.mutex.RUnlock()
-
-			if err != nil {
-				conn.onErrorHook(err)
-				return
-			}
-		case <-conn.Disconnected:
-			return
-		}
-	}
 }
 
 // Close closes the TCP connection. Broadcasts via the Disconnected channel.

@@ -65,7 +65,7 @@ func TestNewClient_ConfigTLS(t *testing.T) {
 	TLSConf := &tls.Config{InsecureSkipVerify: true}
 	conf := Config{
 		Endpoint:    l.Addr().String(),
-		ReadTimeout: 1 * time.Second,
+		ReadTimeout: 500 * time.Millisecond,
 		UseTLS:      true,
 		TLSConfig:   TLSConf,
 		AfterConnectHook: func() error {
@@ -238,7 +238,9 @@ func TestClient_ReadWrite(t *testing.T) {
 	}
 
 	conf := Config{
-		Endpoint: l.Addr().String(),
+		Endpoint:     l.Addr().String(),
+		ReadTimeout:  1 * time.Second,
+		WriteTimeout: 1 * time.Second,
 		AfterReadHook: func(data []byte) ([]byte, error) {
 			processed := append(data, '!')
 			return processed, nil
@@ -265,11 +267,62 @@ func TestClient_ReadWrite(t *testing.T) {
 		t.Error(err)
 	}
 
-	data := <-con.Read
-	expectation := "Testing read/write!"
-	if string(*data) != expectation {
-		t.Errorf("%s != %s", data, expectation)
+	select {
+	case data := <-con.Read:
+		expectation := "Testing read/write!"
+		if string(*data) != expectation {
+			t.Errorf("%s != %s", data, expectation)
+		}
+	case <-time.After(2 * time.Second):
+		t.Error("Test timed out while waiting to read from connection")
 	}
+
+	close(done)
+}
+
+func TestClient_Timeouts(t *testing.T) {
+	done := make(chan bool)
+	l, err := testutils.FlakyServer(done, 1*time.Second, 1*time.Second) // delay connection by 1 second, reading data by 1 second
+	if err != nil {
+		t.Error(err)
+	}
+
+	conf := Config{
+		Endpoint:          l.Addr().String(),
+		ConnectionTimeout: 100 * time.Millisecond,
+		ReadTimeout:       100 * time.Millisecond,
+		WriteTimeout:      100 * time.Millisecond,
+	}
+
+	con, err := NewClient(&conf)
+	if err != nil {
+		t.Error("Expected err to be nil")
+	}
+
+	assertEqual(t, con.GetReadTimeout(), conf.ReadTimeout)
+	assertEqual(t, con.GetWriteTimeout(), conf.WriteTimeout)
+
+	err = con.Connect()
+	if err != nil {
+		t.Error("Received unexpected error when connecting.", err)
+	}
+
+	assertEqual(t, con.IsActive(), true)
+
+	payload := []byte("Testing timeouts")
+	err = con.Write(&payload)
+	if err != nil {
+		t.Error(err)
+	}
+
+	select {
+	case <-con.Disconnected: // should receive the disconnected signal due to read timeout
+		assertEqual(t, con.IsActive(), false)
+	case <-time.After(2 * time.Second):
+		t.Error("Test timed out while waiting to read from connection")
+	}
+
+	con.Close()
 
 	close(done)
 }

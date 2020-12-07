@@ -46,9 +46,8 @@ func EchoServer(done chan bool) (net.Listener, error) {
 }
 
 // FlakyServer creates a TCP listener on a random port and echoes
-// any data sent through the connection. This server drops the connection
-// after the provided duration.
-func FlakyServer(done chan bool, lifetime time.Duration) (net.Listener, error) {
+// any data sent through the connection.
+func FlakyServer(done chan bool, connectDelay, readDelay time.Duration) (net.Listener, error) {
 	// get random available port to listen on
 	l, err := net.Listen("tcp", ":0")
 	if err != nil {
@@ -68,7 +67,7 @@ func FlakyServer(done chan bool, lifetime time.Duration) (net.Listener, error) {
 				}
 
 				go func(c net.Conn) {
-					<-time.After(lifetime) // block until time expires and then close the connection
+					io.Copy(c, c)
 					c.Close()
 				}(conn)
 			}
@@ -96,7 +95,6 @@ func TLSEchoServer(done chan bool, crtFilename, keyFilename string) (net.Listene
 		for {
 			select {
 			case <-done:
-				fmt.Println("Done channel no longer blocking. Returning and closing connection.")
 				return
 			default:
 				conn, err := l.Accept()
