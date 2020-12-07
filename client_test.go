@@ -1,6 +1,7 @@
 package eventedconnection_test
 
 import (
+	"crypto/tls"
 	. "github.com/joedursun/EventedConnection"
 	"github.com/joedursun/EventedConnection/testutils"
 	"math/rand"
@@ -52,11 +53,68 @@ func TestNewClient_Config(t *testing.T) {
 	assertEqual(t, con.GetReadBufferSize(), 2*1024)
 }
 
+func TestNewClient_ConfigTLS(t *testing.T) {
+	done := make(chan bool)
+	l, err := testutils.TLSEchoServer(done, "./testutils/testserver.crt", "./testutils/testserver.key")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	numTimesConnected := 0 // used for counting how many attempts were made to connect to the endpoint
+	numErrors := 0         // let's count how many errors were reported
+	TLSConf := &tls.Config{InsecureSkipVerify: true}
+	conf := Config{
+		Endpoint:    l.Addr().String(),
+		ReadTimeout: 1 * time.Second,
+		UseTLS:      true,
+		TLSConfig:   TLSConf,
+		AfterConnectHook: func() error {
+			numTimesConnected++
+			return nil
+		},
+		OnErrorHook: func(err error) error {
+			numErrors++
+			return nil
+		},
+	}
+	con, err := NewClient(&conf)
+	if err != nil {
+		t.Error("Expected err to be nil")
+	}
+
+	err = con.Connect()
+	defer con.Close()
+	if err != nil {
+		t.Error(err)
+	}
+	assertEqual(t, con.IsActive(), true)
+	assertEqual(t, numTimesConnected, 1)
+
+	// Call connect again and check if a second attempt to connect is made
+	err = con.Connect()
+	if err != nil {
+		t.Error(err)
+	}
+	assertEqual(t, numTimesConnected, 1)
+
+	payload := []byte("Testing TLS payload")
+	con.Write(&payload)
+	select {
+	case received := <-con.Read:
+		if string(*received) != string(payload) {
+			t.Errorf("Expected %s; received %s", received, payload)
+		}
+	case <-time.After(3 * time.Second):
+		t.Error("Read deadline passed and test timed out")
+	}
+	close(done)
+}
+
 // TestNewClient_Connect_Success tests that a connection can be successfully established and that
 // the appropriate callbacks are called.
 func TestClient_Connect_Success(t *testing.T) {
 	done := make(chan bool)
-	l, err := testutils.MockListener(done)
+	l, err := testutils.EchoServer(done)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -133,7 +191,7 @@ func TestClient_Connect_Fail(t *testing.T) {
 
 func TestClient_Close(t *testing.T) {
 	done := make(chan bool)
-	l, err := testutils.MockListener(done)
+	l, err := testutils.EchoServer(done)
 	if err != nil {
 		t.Error(err)
 	}
@@ -172,9 +230,53 @@ func TestClient_Close(t *testing.T) {
 	close(done)
 }
 
+func TestClient_ReadWrite(t *testing.T) {
+	done := make(chan bool)
+	l, err := testutils.EchoServer(done)
+	if err != nil {
+		t.Error(err)
+	}
+
+	conf := Config{
+		Endpoint: l.Addr().String(),
+		AfterReadHook: func(data []byte) ([]byte, error) {
+			processed := append(data, '!')
+			return processed, nil
+		},
+	}
+
+	con, err := NewClient(&conf)
+	if err != nil {
+		t.Error("Expected err to be nil")
+	}
+
+	err = con.Connect()
+	if err != nil {
+		t.Error("Received error when connecting.")
+	}
+
+	assertEqual(t, con.IsActive(), true)
+
+	// Send payload to echo server and wait for data
+	// to be read and processed by the AfterReadHook
+	payload := []byte("Testing read/write")
+	err = con.Write(&payload)
+	if err != nil {
+		t.Error(err)
+	}
+
+	data := <-con.Read
+	expectation := "Testing read/write!"
+	if string(*data) != expectation {
+		t.Errorf("%s != %s", data, expectation)
+	}
+
+	close(done)
+}
+
 func BenchmarkThroughput(b *testing.B) {
 	done := make(chan bool)
-	l, err := testutils.MockListener(done)
+	l, err := testutils.EchoServer(done)
 	if err != nil {
 		b.Fatal(err)
 	}
