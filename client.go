@@ -135,7 +135,11 @@ func (conn *Client) afterConnect() {
 
 // IsActive provides a way to check if the connection is still usable
 func (conn *Client) IsActive() bool {
-	return conn.active
+	conn.mutex.RLock()
+	defer conn.mutex.RUnlock()
+	active := conn.active
+
+	return active
 }
 
 // Write provides a thread-safe way to send messages to the endpoint. If the connection is
