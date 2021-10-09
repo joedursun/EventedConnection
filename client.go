@@ -28,7 +28,6 @@ type Client struct {
 	beforeDisconnectHook BeforeDisconnectHook
 	onErrorHook          OnErrorHook
 
-	active    bool
 	useTLS    bool
 	tlsConfig *tls.Config
 
@@ -41,7 +40,7 @@ type Client struct {
 // NewClient is the Connection constructor.
 func NewClient(conf *Config) (*Client, error) {
 	if len(conf.Endpoint) == 0 {
-		return nil, errors.New("Invalid endpoint (empty string)")
+		return nil, errors.New("invalid endpoint (empty string)")
 	}
 
 	conn := Client{}
@@ -72,11 +71,10 @@ func NewClient(conf *Config) (*Client, error) {
 		conn.useTLS = conf.UseTLS
 	}
 
-	conn.Disconnected = make(chan struct{}, 0)
-	conn.Connected = make(chan struct{}, 0)
+	conn.Disconnected = make(chan struct{})
+	conn.Connected = make(chan struct{})
 	conn.Read = make(chan *[]byte, 4) // buffer of 4 packets (up to 4 * conn.ReadBufferSize). reduces blocking when reading from connection
 	conn.mutex = &sync.RWMutex{}
-	conn.active = false
 
 	conn.afterReadHook = conf.AfterReadHook
 	if conf.AfterReadHook == nil {
@@ -111,17 +109,19 @@ func (conn *Client) Connect() error {
 			return // return early so we don't execute other hooks, send Connected event, etc.
 		}
 
-		conn.mutex.Lock()
-		conn.c = connection
-		conn.active = true
-		conn.mutex.Unlock()
-
-		conn.afterConnect()
+		conn.setConnection(connection)
 
 		go conn.readFromConn()
 		close(conn.Connected) // broadcast that TCP connection to interface was established
 	})
 	return err
+}
+
+func (conn *Client) setConnection(c net.Conn) {
+	defer conn.afterConnect()
+	conn.mutex.Lock()
+	conn.c = c
+	conn.mutex.Unlock()
 }
 
 func (conn *Client) afterConnect() {
@@ -137,9 +137,8 @@ func (conn *Client) afterConnect() {
 func (conn *Client) IsActive() bool {
 	conn.mutex.RLock()
 	defer conn.mutex.RUnlock()
-	active := conn.active
 
-	return active
+	return conn.c != nil
 }
 
 // Write provides a thread-safe way to send messages to the endpoint. If the connection is
@@ -147,27 +146,25 @@ func (conn *Client) IsActive() bool {
 func (conn *Client) Write(data *[]byte) error {
 	var err error
 
-	conn.mutex.RLock() // obtain lock before checking if connection is dead so value isn't changed while reading
-	defer conn.mutex.RUnlock()
-	if conn.c == nil {
+	if !conn.IsActive() {
 		err = errors.New("called Write with nil connection")
 		conn.onErrorHook(err)
 		return err
 	}
 
-	if conn.active {
-		err = conn.c.SetWriteDeadline(time.Now().Add(conn.writeTimeout))
-		if err != nil {
-			conn.onErrorHook(err)
-			return err
-		}
-		_, err = conn.c.Write(*data)
-		if err != nil {
-			conn.onErrorHook(err)
-			return err
-		}
-	} else {
-		err = errors.New("connection is not active and data was not sent")
+	conn.mutex.RLock()
+	connection := conn.c
+	timeout := conn.writeTimeout
+	conn.mutex.RUnlock()
+
+	err = connection.SetWriteDeadline(time.Now().Add(timeout))
+	if err != nil {
+		conn.onErrorHook(err)
+		return err
+	}
+
+	_, err = connection.Write(*data)
+	if err != nil {
 		conn.onErrorHook(err)
 	}
 
@@ -183,11 +180,9 @@ func (conn *Client) Close() {
 	conn.closer.Do(func() {
 		conn.mutex.Lock()
 		defer conn.mutex.Unlock()
-		conn.active = false // set "active" flag to false so we no longer queue up packets to send
 
 		if conn.beforeDisconnectHook != nil {
-			err := conn.beforeDisconnectHook()
-			if err != nil {
+			if err := conn.beforeDisconnectHook(); err != nil {
 				conn.onErrorHook(err)
 			}
 		}
