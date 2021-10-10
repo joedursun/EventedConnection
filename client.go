@@ -37,33 +37,52 @@ type Client struct {
 	mutex *sync.RWMutex // allows for using this connection in multiple goroutines
 }
 
+func (conn *Client) setDefaults() {
+	if conn.connectionTimeout == 0*time.Second { // default timeout for connecting
+		conn.connectionTimeout = DefaultConnectionTimeout
+	}
+
+	if conn.readTimeout == 0*time.Second { // default timeout for connecting
+		conn.readTimeout = DefaultReadTimeout
+	}
+
+	if conn.writeTimeout == 0*time.Second { // default timeout for connecting
+		conn.writeTimeout = DefaultWriteTimeout
+	}
+
+	if conn.readBufferSize == 0 {
+		conn.readBufferSize = DefaultReadBufferSize
+	}
+
+	if conn.afterReadHook == nil {
+		conn.afterReadHook = defaultAfterReadHook
+	}
+
+	if conn.onErrorHook == nil {
+		conn.onErrorHook = defaultOnErrorHook
+	}
+}
+
 // NewClient is the Connection constructor.
 func NewClient(conf *Config) (*Client, error) {
 	if len(conf.Endpoint) == 0 {
 		return nil, errors.New("invalid endpoint (empty string)")
 	}
 
-	conn := Client{}
-	conn.endpoint = conf.Endpoint
-
-	conn.connectionTimeout = conf.ConnectionTimeout
-	if conf.ConnectionTimeout == 0*time.Second { // default timeout for connecting
-		conn.connectionTimeout = DefaultConnectionTimeout
-	}
-
-	conn.readTimeout = conf.ReadTimeout
-	if conf.ReadTimeout == 0*time.Second { // default timeout for receiving data
-		conn.readTimeout = DefaultReadTimeout
-	}
-
-	conn.writeTimeout = conf.WriteTimeout
-	if conf.WriteTimeout == 0*time.Second { // default timeout for sending data
-		conn.writeTimeout = DefaultWriteTimeout
-	}
-
-	conn.readBufferSize = conf.ReadBufferSize
-	if conf.ReadBufferSize == 0 {
-		conn.readBufferSize = DefaultReadBufferSize
+	conn := Client{
+		endpoint:             conf.Endpoint,
+		connectionTimeout:    conf.ConnectionTimeout,
+		readTimeout:          conf.ReadTimeout,
+		writeTimeout:         conf.WriteTimeout,
+		readBufferSize:       conf.ReadBufferSize,
+		afterReadHook:        conf.AfterReadHook,
+		afterConnectHook:     conf.AfterConnectHook,
+		beforeDisconnectHook: conf.BeforeDisconnectHook,
+		onErrorHook:          conf.OnErrorHook,
+		Disconnected:         make(chan struct{}),
+		Connected:            make(chan struct{}),
+		Read:                 make(chan *[]byte, 4), // 4 packets (up to 4 * conn.ReadBufferSize); reduces blocking when reading from connection
+		mutex:                &sync.RWMutex{},
 	}
 
 	if conf.UseTLS {
@@ -71,23 +90,7 @@ func NewClient(conf *Config) (*Client, error) {
 		conn.useTLS = conf.UseTLS
 	}
 
-	conn.Disconnected = make(chan struct{})
-	conn.Connected = make(chan struct{})
-	conn.Read = make(chan *[]byte, 4) // buffer of 4 packets (up to 4 * conn.ReadBufferSize). reduces blocking when reading from connection
-	conn.mutex = &sync.RWMutex{}
-
-	conn.afterReadHook = conf.AfterReadHook
-	if conf.AfterReadHook == nil {
-		conn.afterReadHook = defaultAfterReadHook
-	}
-
-	conn.afterConnectHook = conf.AfterConnectHook
-	conn.beforeDisconnectHook = conf.BeforeDisconnectHook
-
-	conn.onErrorHook = conf.OnErrorHook
-	if conf.OnErrorHook == nil {
-		conn.onErrorHook = defaultOnErrorHook
-	}
+	conn.setDefaults()
 
 	return &conn, nil
 }
