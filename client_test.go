@@ -2,11 +2,12 @@ package eventedconnection_test
 
 import (
 	"crypto/tls"
-	. "github.com/joedursun/EventedConnection"
-	"github.com/joedursun/EventedConnection/testutils"
 	"math/rand"
 	"testing"
 	"time"
+
+	. "github.com/joedursun/EventedConnection"
+	"github.com/joedursun/EventedConnection/testutils"
 )
 
 func TestNewClient_Config(t *testing.T) {
@@ -376,6 +377,53 @@ func TestClient_Timeouts(t *testing.T) {
 	con.Close()
 
 	close(done)
+}
+
+func TestClient_Reconnect(t *testing.T) {
+	done := make(chan bool)
+	l, err := testutils.EchoServer(done)
+	if err != nil {
+		t.Error(err)
+	}
+
+	numConnections := 0
+	conf := Config{
+		Endpoint:     l.Addr().String(),
+		ReadTimeout:  1 * time.Second,
+		WriteTimeout: 1 * time.Second,
+		AfterConnectHook: func() error {
+			numConnections++
+			return nil
+		},
+	}
+
+	con, err := NewClient(&conf)
+	if err != nil {
+		t.Error("Expected err to be nil")
+	}
+
+	err = con.Connect()
+	if err != nil {
+		t.Error("Received error when connecting.")
+	}
+
+	assertEqual(t, con.IsActive(), true)
+
+LOOP:
+	for numConnections < 2 {
+		con.Close()
+		select {
+		case <-con.Disconnected:
+			if err := con.Reconnect(); err != nil {
+				t.Errorf("received error when reconnecting: %s", err)
+				return
+			}
+		case <-time.After(1 * time.Second):
+			break LOOP
+		}
+	}
+
+	assertEqual(t, numConnections, 2)
 }
 
 func BenchmarkThroughput(b *testing.B) {

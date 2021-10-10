@@ -43,8 +43,6 @@ type BeforeDisconnectHook func() error
 type OnErrorHook func(error) error
 
 func defaultAfterReadHook(data []byte) ([]byte, error) { return data, nil }
-func defaultAfterConnectHook() error                   { return nil }
-func defaultBeforeDisconnectHook() error               { return nil }
 func defaultOnErrorHook(err error) error               { return err }
 
 // Config - Struct for containing all configuration data for the Client

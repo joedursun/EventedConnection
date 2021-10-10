@@ -110,6 +110,7 @@ func (conn *Client) Connect() error {
 		}
 
 		conn.setConnection(connection)
+		defer conn.afterConnect()
 
 		go conn.readFromConn()
 		close(conn.Connected) // broadcast that TCP connection to interface was established
@@ -117,8 +118,23 @@ func (conn *Client) Connect() error {
 	return err
 }
 
+func (conn *Client) Reconnect() error {
+	conn.Close()
+	conn.reset()
+	return conn.Connect()
+}
+
+func (conn *Client) reset() {
+	conn.mutex.Lock()
+	defer conn.mutex.Unlock()
+
+	conn.Disconnected = make(chan struct{})
+	conn.Connected = make(chan struct{})
+	conn.starter = sync.Once{}
+	conn.closer = sync.Once{}
+}
+
 func (conn *Client) setConnection(c net.Conn) {
-	defer conn.afterConnect()
 	conn.mutex.Lock()
 	conn.c = c
 	conn.mutex.Unlock()
@@ -146,26 +162,24 @@ func (conn *Client) IsActive() bool {
 func (conn *Client) Write(data *[]byte) error {
 	var err error
 
-	if !conn.IsActive() {
+	connection := conn.rawConnection()
+	if connection == nil {
 		err = errors.New("called Write with nil connection")
 		conn.onErrorHook(err)
 		return err
 	}
 
-	conn.mutex.RLock()
-	connection := conn.c
-	timeout := conn.writeTimeout
-	conn.mutex.RUnlock()
-
-	err = connection.SetWriteDeadline(time.Now().Add(timeout))
+	err = connection.SetWriteDeadline(time.Now().Add(conn.GetWriteTimeout()))
 	if err != nil {
 		conn.onErrorHook(err)
+		defer conn.Close()
 		return err
 	}
 
 	_, err = connection.Write(*data)
 	if err != nil {
 		conn.onErrorHook(err)
+		defer conn.Close()
 	}
 
 	return err
@@ -177,10 +191,10 @@ func (conn *Client) Write(data *[]byte) error {
 // short-circuiting of downstream `select` blocks and avoid attempts to write to it
 // by the caller.
 func (conn *Client) Close() {
-	conn.closer.Do(func() {
-		conn.mutex.Lock()
-		defer conn.mutex.Unlock()
+	conn.mutex.Lock()
+	defer conn.mutex.Unlock()
 
+	conn.closer.Do(func() {
 		if conn.beforeDisconnectHook != nil {
 			if err := conn.beforeDisconnectHook(); err != nil {
 				conn.onErrorHook(err)
@@ -200,19 +214,20 @@ func (conn *Client) Disconnect() {
 	conn.Close()
 }
 
-// processResponse handles data coming from TCP connection
+// processResponse handles data coming from the TCP connection
 // and sends it through the conn.Read chan
-func (conn *Client) processResponse(data []byte) error {
+func (conn *Client) processResponse(data []byte) (err error) {
+	var processed []byte
+
 	if len(data) > 0 {
-		processed, err := conn.afterReadHook(data)
+		processed, err = conn.afterReadHook(data)
 		if err != nil {
 			conn.onErrorHook(err)
-			return err
 		}
 		conn.Read <- &processed
 	}
 
-	return nil
+	return err
 }
 
 // readFromConn reads data from the connection into a buffer and then
@@ -221,26 +236,24 @@ func (conn *Client) processResponse(data []byte) error {
 func (conn *Client) readFromConn() error {
 	defer conn.Close()
 
-	buffer := make([]byte, conn.readBufferSize)
+	buffer := make([]byte, conn.GetReadBufferSize())
 	for {
 		var err error
+		connection := conn.rawConnection()
 
-		conn.mutex.RLock()
-		if conn.c == nil {
-			conn.mutex.RUnlock()
+		if connection == nil {
 			err = errors.New("unable to read from nil connection")
 			conn.onErrorHook(err)
 			return err
 		}
 
-		conn.mutex.RUnlock()
-		err = conn.c.SetReadDeadline(time.Now().Add(conn.readTimeout))
+		err = connection.SetReadDeadline(time.Now().Add(conn.GetReadTimeout()))
 		if err != nil {
 			conn.onErrorHook(err)
 			return err
 		}
 
-		numBytesRead, err := conn.c.Read(buffer)
+		numBytesRead, err := connection.Read(buffer)
 		if numBytesRead > 0 {
 			res := make([]byte, numBytesRead)
 			// Copy the buffer so it's safe to pass along
@@ -253,6 +266,14 @@ func (conn *Client) readFromConn() error {
 			return err
 		}
 	}
+}
+
+// rawConnection is used for getting the underlying TCP connection
+// in a thread safe way
+func (conn *Client) rawConnection() net.Conn {
+	conn.mutex.RLock()
+	defer conn.mutex.RUnlock()
+	return conn.c
 }
 
 // GetEndpoint returns the value of conn.endpoint
