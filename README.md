@@ -37,82 +37,114 @@ Here is a simple example of how to open a connection, send the phrase "Hello wor
 package main
 
 import (
-  "fmt"
-  "github.com/joedursun/EventedConnection"
+	"fmt"
+
+	eventedconnection "github.com/joedursun/EventedConnection"
 )
 
-func sendHelloWorld() {
-  conf := eventedconnection.Config{ Endpoint: "localhost:5111" }
-  con, err := eventedconnection.NewClient(conf)
+func main() {
+	conf := eventedconnection.Config{Endpoint: "localhost:5111"}
+	con, err := eventedconnection.NewClient(&conf)
 
-  if err != nil {
-    fmt.Println(err)
-    return
-  }
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
 
-  err = con.Connect()
-  if err != nil {
-    fmt.Println(err)
-    return
-  }
+	err = con.Connect()
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
 
-  msg := []byte("Hello world!")
-  con.Write(&msg)
-  con.Close()
+	msg := []byte("Hello world!")
+	con.Write(&msg)
+	con.Close()
 }
 
+```
+
+To auto-reconnect try the following:
+
+```go
+package main
+
+import (
+	eventedconnection "github.com/joedursun/EventedConnection"
+)
+
+func main() {
+	conf := eventedconnection.Config{Endpoint: "localhost:5111"}
+	con, _ := eventedconnection.NewClient(&conf)
+	err := con.Connect()
+	if err != nil {
+		return
+	}
+
+	reconnectAttemptsLeft := 5
+	for reconnectAttemptsLeft > 0 {
+		<-con.Disconnected
+		reconnectAttemptsLeft--
+		if err := con.Reconnect(); err != nil {
+			return
+		}
+	}
+}
 ```
 
 For a more advanced example, here we open the connection, overwrite the read data, and close the connection.
 
 ```go
+package main
+
 import (
-  "fmt"
-  "github.com/joedursun/EventedConnection"
+	"fmt"
+
+	eventedconnection "github.com/joedursun/EventedConnection"
 )
 
-func readFromConnection() {
-  // NewConfig initializes a config struct with defaults
-  // NewClient will provide defaults if the config
-  // doesn't set them, so using NewConfig is optional
-  conf := eventedconnection.NewConfig()
-  conf.Endpoint = "localhost:5111"
-  conf.AfterReadHook = func(data []byte) ([]byte, error) {
-    fmt.Println("Data before processing ", string(data))
-    processed := []byte("Processed data!")
-    return processed, nil
-  }
+func main() {
+	// NewConfig initializes a config struct with defaults
+	// NewClient will provide defaults if the config
+	// doesn't set them, so using NewConfig is optional
+	conf := eventedconnection.NewConfig()
+	conf.Endpoint = "localhost:5111"
+	conf.AfterReadHook = func(data []byte) ([]byte, error) {
+		fmt.Println("Data before processing ", string(data))
+		processed := []byte("Processed data!")
+		return processed, nil
+	}
 
-  con, err := eventedconnection.NewClient(conf)
-  if err != nil {
-    fmt.Println(err)
-    return
-  }
+	con, err := eventedconnection.NewClient(conf)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
 
-  err = con.Connect()
-  if err != nil {
-    fmt.Println(err)
-    return
-  }
+	err = con.Connect()
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
 
-  // the following loop closes the connection after reading one
-  // packet but since con.Close() is idempotent we can safely
-  // add this deferred Close()
-  defer con.Close()
+	// the following loop closes the connection after reading one
+	// packet but since con.Close() is idempotent we can safely
+	// add this deferred Close()
+	defer con.Close()
 
-  for {
-    select {
-    case <-con.Disconnected:
-      fmt.Println("Disconnected.")
-      return
-    case data := <-con.Read:
-      if data != nil {
-        fmt.Println(string(*data))
-      }
-      fmt.Println("Closing the connection.")
-      con.Close()
-    }
-  }
+	for {
+		select {
+		case <-con.Disconnected:
+			fmt.Println("Disconnected.")
+			return
+		case data := <-con.Read:
+			if data != nil {
+				fmt.Println(string(*data))
+			}
+			fmt.Println("Closing the connection.")
+			con.Close()
+		}
+	}
 }
 ```
 
