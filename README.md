@@ -49,6 +49,7 @@ func main() {
 	if err := con.Connect(); err != nil {
 		return
 	}
+	defer con.Close()
 
 	message := []byte("Hello, world!")
 	con.Write(&message)
